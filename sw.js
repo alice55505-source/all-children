@@ -1,4 +1,4 @@
-const CACHE_NAME = "children-stats-cache-v2";
+const CACHE_NAME = "stats-cache-v3";
 const APP_SHELL = [
   "./",
   "./index.html",

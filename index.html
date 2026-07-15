@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>全台兒童主日學統計產生器</title>
-<meta name="description" content="上傳各召會週報矩陣，計算主日、小排、召會生活平均與全台總計" />
+<title>全台專項統計產生器</title>
+<meta name="description" content="上傳各召會週報，計算兒童與青職各項每週平均，並彙總全台總計" />
 <meta name="theme-color" content="#2563eb" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-<meta name="apple-mobile-web-app-title" content="兒童統計" />
+<meta name="apple-mobile-web-app-title" content="專項統計" />
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon-192.png" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -18,91 +18,142 @@
 <body>
 <div class="wrap">
   <header class="app-header">
-    <h1>全台兒童主日學統計產生器</h1>
-    <p>上傳各召會「週報矩陣」報表，自動算出主日、小排、召會生活的週平均，並彙總全台總計。</p>
+    <h1>全台專項統計產生器</h1>
+    <p>上傳各召會週報，自動算出各項每週平均，並彙總全台總計。</p>
   </header>
 
-  <section class="card">
-    <h2>1. 上傳報表 <span class="badge">選擇召會後上傳</span></h2>
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab-target="children">兒童</button>
+    <button class="tab-btn" data-tab-target="youth">青職</button>
+  </nav>
 
-    <div class="field">
-      <label for="congregation-select">召會</label>
-      <select id="congregation-select"></select>
-    </div>
+  <div data-tab-panel="children">
+    <section class="card">
+      <h2>1. 上傳報表 <span class="badge">選擇召會後上傳</span></h2>
 
-    <div class="field">
-      <label for="file-input">週報 Excel 檔（.xlsx）</label>
-      <div class="dropzone" id="dropzone">
-        將檔案拖曳到這裡，或點擊選擇檔案
-        <input type="file" id="file-input" accept=".xlsx" style="margin-top:0.6rem;" />
+      <div class="field">
+        <label for="children-congregation-select">召會</label>
+        <select id="children-congregation-select"></select>
       </div>
-      <div class="file-picked" id="file-picked"></div>
-    </div>
 
-    <div class="upload-actions">
-      <button class="btn-primary" id="parse-btn">解析並加入</button>
-      <button class="btn-secondary" id="reset-all-btn">清除全部資料</button>
-    </div>
-
-    <div class="status-msg" id="status-msg"></div>
-  </section>
-
-  <section class="card">
-    <h2>2. 上傳進度</h2>
-    <div class="progress-row">
-      <span>已上傳召會</span>
-      <span class="progress-count"><span id="progress-count">0</span> / <span id="progress-total">28</span></span>
-    </div>
-    <div class="progress-bar-track">
-      <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
-    </div>
-    <div class="chip-grid" id="chip-grid"></div>
-  </section>
-
-  <section class="card">
-    <h2>3. 各召會結果</h2>
-    <div class="table-scroll">
-      <table id="results-table">
-        <thead>
-          <tr>
-            <th>召會</th>
-            <th>週數</th>
-            <th>主日（週平均）</th>
-            <th>召會生活（期間人數）</th>
-            <th>小排（週平均）</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody id="results-tbody"></tbody>
-      </table>
-    </div>
-    <div class="empty-hint" id="results-empty">尚未上傳任何召會的資料</div>
-  </section>
-
-  <section class="card">
-    <h2>4. 全台總計</h2>
-    <div class="summary-grid">
-      <div class="stat-tile">
-        <div class="stat-label">主日總計</div>
-        <div class="stat-value" id="total-sunday">0</div>
+      <div class="field">
+        <label for="children-file-input">週報 Excel 檔（.xlsx，含「週報矩陣」「摘要」分頁）</label>
+        <div class="dropzone" id="children-dropzone">
+          將檔案拖曳到這裡，或點擊選擇檔案
+          <input type="file" id="children-file-input" accept=".xlsx" style="margin-top:0.6rem;" />
+        </div>
+        <div class="file-picked" id="children-file-picked"></div>
       </div>
-      <div class="stat-tile">
-        <div class="stat-label">召會生活總計</div>
-        <div class="stat-value" id="total-life">0</div>
+
+      <div class="upload-actions">
+        <button class="btn-primary" id="children-parse-btn">解析並加入</button>
+        <button class="btn-secondary" id="children-reset-all-btn">清除全部資料</button>
       </div>
-      <div class="stat-tile">
-        <div class="stat-label">小排總計</div>
-        <div class="stat-value" id="total-group">0</div>
+
+      <div class="status-msg" id="children-status-msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>2. 上傳進度</h2>
+      <div class="progress-row">
+        <span>已上傳召會</span>
+        <span class="progress-count"><span id="children-progress-count">0</span> / <span id="children-progress-total">28</span></span>
       </div>
-    </div>
-    <div class="summary-warn" id="summary-warn" style="display:none;"></div>
-    <div class="card-actions">
-      <button class="btn-secondary" id="copy-summary-btn">複製總計文字</button>
-    </div>
-  </section>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="children-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="chip-grid" id="children-chip-grid"></div>
+    </section>
+
+    <section class="card">
+      <h2>3. 各召會結果</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr id="children-results-thead-row"></tr></thead>
+          <tbody id="children-results-tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty-hint" id="children-results-empty">尚未上傳任何召會的資料</div>
+    </section>
+
+    <section class="card">
+      <h2>4. 全台總計</h2>
+      <div class="summary-grid" id="children-summary-grid"></div>
+      <div class="summary-warn" id="children-summary-warn" style="display:none;"></div>
+      <div class="card-actions">
+        <button class="btn-secondary" id="children-copy-summary-btn">複製總計文字</button>
+      </div>
+    </section>
+
+    <p class="tab-footnote">
+      主日、小排為「週報矩陣」分頁中「合計」列的每週平均值；召會生活為「摘要」分頁 KPI 中「期間有召會生活」的人數。
+    </p>
+  </div>
+
+  <div data-tab-panel="youth" style="display:none;">
+    <section class="card">
+      <h2>1. 上傳報表 <span class="badge">選擇召會後上傳</span></h2>
+
+      <div class="field">
+        <label for="youth-congregation-select">召會</label>
+        <select id="youth-congregation-select"></select>
+      </div>
+
+      <div class="field">
+        <label for="youth-file-input">週報 Excel 檔（.xlsx，含「週報網格」分頁）</label>
+        <div class="dropzone" id="youth-dropzone">
+          將檔案拖曳到這裡，或點擊選擇檔案
+          <input type="file" id="youth-file-input" accept=".xlsx" style="margin-top:0.6rem;" />
+        </div>
+        <div class="file-picked" id="youth-file-picked"></div>
+      </div>
+
+      <div class="upload-actions">
+        <button class="btn-primary" id="youth-parse-btn">解析並加入</button>
+        <button class="btn-secondary" id="youth-reset-all-btn">清除全部資料</button>
+      </div>
+
+      <div class="status-msg" id="youth-status-msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>2. 上傳進度</h2>
+      <div class="progress-row">
+        <span>已上傳召會</span>
+        <span class="progress-count"><span id="youth-progress-count">0</span> / <span id="youth-progress-total">28</span></span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="youth-progress-bar" style="width:0%"></div>
+      </div>
+      <div class="chip-grid" id="youth-chip-grid"></div>
+    </section>
+
+    <section class="card">
+      <h2>3. 各召會結果</h2>
+      <div class="table-scroll">
+        <table>
+          <thead><tr id="youth-results-thead-row"></tr></thead>
+          <tbody id="youth-results-tbody"></tbody>
+        </table>
+      </div>
+      <div class="empty-hint" id="youth-results-empty">尚未上傳任何召會的資料</div>
+    </section>
+
+    <section class="card">
+      <h2>4. 全台總計</h2>
+      <div class="summary-grid" id="youth-summary-grid"></div>
+      <div class="summary-warn" id="youth-summary-warn" style="display:none;"></div>
+      <div class="card-actions">
+        <button class="btn-secondary" id="youth-copy-summary-btn">複製總計文字</button>
+      </div>
+    </section>
+
+    <p class="tab-footnote">
+      主日、家聚會（出訪+受訪）、小排、生命讀經皆為「週報網格」分頁中「青職」欄位的每週平均值。
+    </p>
+  </div>
 
   <footer class="app-footer">
-    主日、小排為該召會「週報矩陣」分頁中「合計」列的每週平均值；召會生活為「摘要」分頁 KPI 中「期間有召會生活」的人數。<br />
     全台總計為已上傳召會之數值加總。資料僅儲存在本機瀏覽器（localStorage），不會上傳到任何伺服器。
   </footer>
 </div>

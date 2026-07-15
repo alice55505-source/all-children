@@ -1,7 +1,7 @@
 {
-  "name": "全台兒童主日學統計產生器",
-  "short_name": "兒童統計",
-  "description": "上傳各召會週報矩陣，計算主日、小排、召會生活平均與全台總計",
+  "name": "全台專項統計產生器",
+  "short_name": "專項統計",
+  "description": "上傳各召會週報，計算兒童與青職各項每週平均與全台總計",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
