@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>全台兒童主日學統計產生器</title>
+<meta name="description" content="上傳各召會週報矩陣，計算主日、小排、召會生活平均與全台總計" />
+<meta name="theme-color" content="#2563eb" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="兒童統計" />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="wrap">
+  <header class="app-header">
+    <h1>全台兒童主日學統計產生器</h1>
+    <p>上傳各召會「週報矩陣」報表，自動算出主日、小排、召會生活的週平均，並彙總全台總計。</p>
+  </header>
+
+  <section class="card">
+    <h2>1. 上傳報表 <span class="badge">選擇召會後上傳</span></h2>
+
+    <div class="field">
+      <label for="congregation-select">召會</label>
+      <select id="congregation-select"></select>
+    </div>
+
+    <div class="field">
+      <label for="file-input">週報 Excel 檔（.xlsx）</label>
+      <div class="dropzone" id="dropzone">
+        將檔案拖曳到這裡，或點擊選擇檔案
+        <input type="file" id="file-input" accept=".xlsx" style="margin-top:0.6rem;" />
+      </div>
+      <div class="file-picked" id="file-picked"></div>
+    </div>
+
+    <div class="upload-actions">
+      <button class="btn-primary" id="parse-btn">解析並加入</button>
+      <button class="btn-secondary" id="reset-all-btn">清除全部資料</button>
+    </div>
+
+    <div class="status-msg" id="status-msg"></div>
+  </section>
+
+  <section class="card">
+    <h2>2. 上傳進度</h2>
+    <div class="progress-row">
+      <span>已上傳召會</span>
+      <span class="progress-count"><span id="progress-count">0</span> / <span id="progress-total">28</span></span>
+    </div>
+    <div class="progress-bar-track">
+      <div class="progress-bar-fill" id="progress-bar" style="width:0%"></div>
+    </div>
+    <div class="chip-grid" id="chip-grid"></div>
+  </section>
+
+  <section class="card">
+    <h2>3. 各召會結果（每週平均）</h2>
+    <div class="table-scroll">
+      <table id="results-table">
+        <thead>
+          <tr>
+            <th>召會</th>
+            <th>週數</th>
+            <th>主日</th>
+            <th>小排</th>
+            <th>召會生活</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="results-tbody"></tbody>
+      </table>
+    </div>
+    <div class="empty-hint" id="results-empty">尚未上傳任何召會的資料</div>
+  </section>
+
+  <section class="card">
+    <h2>4. 全台總計</h2>
+    <div class="summary-grid">
+      <div class="stat-tile">
+        <div class="stat-label">主日總計</div>
+        <div class="stat-value" id="total-sunday">0</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">小排總計</div>
+        <div class="stat-value" id="total-group">0</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">召會生活總計</div>
+        <div class="stat-value" id="total-life">0</div>
+      </div>
+    </div>
+    <div class="summary-warn" id="summary-warn" style="display:none;"></div>
+    <div class="card-actions">
+      <button class="btn-secondary" id="copy-summary-btn">複製總計文字</button>
+    </div>
+  </section>
+
+  <footer class="app-footer">
+    每個召會的數字為該召會「週報矩陣」分頁中「合計」列的每週平均值；全台總計為已上傳召會之平均值加總。<br />
+    資料僅儲存在本機瀏覽器（localStorage），不會上傳到任何伺服器。
+  </footer>
+</div>
+
+<script src="js/xlsx.core.min.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
