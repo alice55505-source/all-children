@@ -1,12 +1,35 @@
 (function () {
   "use strict";
 
-  var CONGREGATIONS = [
+  var DEFAULT_CONGREGATIONS = [
     "斗六", "古坑", "林內", "西螺", "莿桐", "斗南", "虎尾", "土庫",
     "崙背", "褒忠", "二崙", "麥寮", "北港", "口湖", "嘉義市", "中埔",
     "竹崎", "番路", "民雄", "溪口", "大林", "新港", "六腳", "朴子",
     "布袋", "鹿草", "太保", "水上"
   ];
+
+  var CONGREGATIONS_STORAGE_KEY = "congregationList_v1";
+
+  function loadCongregations() {
+    try {
+      var raw = localStorage.getItem(CONGREGATIONS_STORAGE_KEY);
+      if (raw == null) return DEFAULT_CONGREGATIONS.slice();
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : DEFAULT_CONGREGATIONS.slice();
+    } catch (e) {
+      return DEFAULT_CONGREGATIONS.slice();
+    }
+  }
+
+  function saveCongregations(list) {
+    try {
+      localStorage.setItem(CONGREGATIONS_STORAGE_KEY, JSON.stringify(list));
+    } catch (e) {
+      /* storage unavailable, ignore */
+    }
+  }
+
+  var CONGREGATIONS = loadCongregations();
 
   var TOTAL_LABEL = "合計";
 
@@ -292,6 +315,14 @@
 
     function initSelect() {
       els.select.innerHTML = "";
+      if (!CONGREGATIONS.length) {
+        var placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "尚未設定召會，請先到設定新增";
+        els.select.appendChild(placeholder);
+        els.parseBtn.disabled = true;
+        return;
+      }
       CONGREGATIONS.forEach(function (name) {
         var opt = document.createElement("option");
         opt.value = name;
@@ -364,11 +395,15 @@
 
     function onParseClick() {
       clearStatus();
+      var congregation = els.select.value;
+      if (!congregation) {
+        showStatus("請先到設定新增召會", "error");
+        return;
+      }
       if (!pickedFile) {
         showStatus("請先選擇一個 .xlsx 檔案", "error");
         return;
       }
-      var congregation = els.select.value;
       els.parseBtn.disabled = true;
 
       pickedFile.arrayBuffer().then(function (buf) {
@@ -559,8 +594,70 @@
     });
   }
 
+  function parseCongregationLines(text) {
+    var seen = {};
+    var list = [];
+    text.split("\n").forEach(function (line) {
+      var name = line.trim();
+      if (!name || seen[name]) return;
+      seen[name] = true;
+      list.push(name);
+    });
+    return list;
+  }
+
+  function initSettingsModal() {
+    var openBtn = document.getElementById("open-settings-btn");
+    var backdrop = document.getElementById("settings-backdrop");
+    var textarea = document.getElementById("settings-textarea");
+    var countEl = document.getElementById("settings-count");
+    var clearBtn = document.getElementById("settings-clear-btn");
+    var defaultBtn = document.getElementById("settings-default-btn");
+    var cancelBtn = document.getElementById("settings-cancel-btn");
+    var saveBtn = document.getElementById("settings-save-btn");
+
+    function updateCount() {
+      var count = parseCongregationLines(textarea.value).length;
+      countEl.textContent = "目前共 " + count + " 個召會";
+    }
+
+    function open() {
+      textarea.value = loadCongregations().join("\n");
+      updateCount();
+      backdrop.style.display = "flex";
+    }
+
+    function close() {
+      backdrop.style.display = "none";
+    }
+
+    openBtn.addEventListener("click", open);
+    cancelBtn.addEventListener("click", close);
+    backdrop.addEventListener("click", function (e) {
+      if (e.target === backdrop) close();
+    });
+    textarea.addEventListener("input", updateCount);
+
+    clearBtn.addEventListener("click", function () {
+      textarea.value = "";
+      updateCount();
+    });
+
+    defaultBtn.addEventListener("click", function () {
+      textarea.value = DEFAULT_CONGREGATIONS.join("\n");
+      updateCount();
+    });
+
+    saveBtn.addEventListener("click", function () {
+      var list = parseCongregationLines(textarea.value);
+      saveCongregations(list);
+      window.location.reload();
+    });
+  }
+
   function init() {
     initTabs();
+    initSettingsModal();
 
     createStatsModule({
       prefix: "children",

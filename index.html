@@ -27,8 +27,13 @@
 <body>
 <div class="wrap">
   <header class="app-header">
-    <h1>全台專項統計產生器</h1>
-    <p>上傳各召會週報，自動算出各項每週平均，並彙總全台總計。</p>
+    <div class="app-header-row">
+      <div>
+        <h1>全台專項統計產生器</h1>
+        <p>上傳各召會週報，自動算出各項每週平均，並彙總全台總計。</p>
+      </div>
+      <button class="btn-secondary settings-btn" id="open-settings-btn">⚙ 設定召會</button>
+    </div>
   </header>
 
   <nav class="tab-nav">
@@ -165,6 +170,26 @@
   <footer class="app-footer">
     全台總計為已上傳召會之數值加總。資料僅儲存在本機瀏覽器（localStorage），不會上傳到任何伺服器。
   </footer>
+</div>
+
+<div class="modal-backdrop" id="settings-backdrop" style="display:none;">
+  <div class="modal">
+    <h2>設定召會清單</h2>
+    <p class="modal-hint">每行一個召會名稱，兩個分頁（兒童／青職）共用同一份清單。</p>
+    <textarea id="settings-textarea" rows="12" placeholder="例如：
+斗六
+古坑
+林內"></textarea>
+    <p class="modal-hint" id="settings-count"></p>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="settings-clear-btn">清空全部</button>
+      <button class="btn-secondary" id="settings-default-btn">還原雲嘉預設</button>
+      <div class="modal-actions-right">
+        <button class="btn-secondary" id="settings-cancel-btn">取消</button>
+        <button class="btn-primary" id="settings-save-btn">儲存並套用</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script src="js/xlsx.core.min.js"></script>
