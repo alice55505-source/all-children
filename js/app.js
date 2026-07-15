@@ -10,9 +10,6 @@
   ];
   var DEFAULT_REGION_NAME = "未分區";
 
-  var GROUPS_STORAGE_KEY = "congregationGroups_v1";
-  var LEGACY_FLAT_STORAGE_KEY = "congregationList_v1";
-
   function normalizeGroups(raw) {
     if (!Array.isArray(raw)) return null;
     var seen = {};
@@ -33,34 +30,6 @@
     return groups;
   }
 
-  function loadCongregationGroups() {
-    try {
-      var raw = localStorage.getItem(GROUPS_STORAGE_KEY);
-      if (raw != null) {
-        var parsed = normalizeGroups(JSON.parse(raw));
-        if (parsed) return parsed;
-      }
-      var legacyRaw = localStorage.getItem(LEGACY_FLAT_STORAGE_KEY);
-      if (legacyRaw != null) {
-        var legacyParsed = JSON.parse(legacyRaw);
-        if (Array.isArray(legacyParsed)) {
-          return normalizeGroups([{ region: DEFAULT_REGION_NAME, members: legacyParsed }]) || DEFAULT_GROUPS;
-        }
-      }
-      return DEFAULT_GROUPS.map(function (g) { return { region: g.region, members: g.members.slice() }; });
-    } catch (e) {
-      return DEFAULT_GROUPS.map(function (g) { return { region: g.region, members: g.members.slice() }; });
-    }
-  }
-
-  function saveCongregationGroups(groups) {
-    try {
-      localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups));
-    } catch (e) {
-      /* storage unavailable, ignore */
-    }
-  }
-
   function flattenGroups(groups) {
     var flat = [];
     groups.forEach(function (g) {
@@ -69,8 +38,10 @@
     return flat;
   }
 
-  var CONGREGATION_GROUPS = loadCongregationGroups();
-  var CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
+  var CONGREGATION_GROUPS = [];
+  var CONGREGATIONS = [];
+  var dataState = {};
+  var ROOM_ID = null;
 
   var TOTAL_LABEL = "合計";
 
@@ -85,6 +56,55 @@
 
   function formatNum(n) {
     return Math.round(n * 10) / 10;
+  }
+
+  // ---- Room API ----
+
+  function apiCreateRoom() {
+    return fetch("/api/rooms", { method: "POST" }).then(function (res) {
+      if (!res.ok) throw new Error("建立房間失敗");
+      return res.json();
+    });
+  }
+
+  function apiFetchRoom(id) {
+    return fetch("/api/rooms/" + encodeURIComponent(id)).then(function (res) {
+      if (res.status === 404) {
+        var err = new Error("找不到這個房間");
+        err.notFound = true;
+        throw err;
+      }
+      if (!res.ok) throw new Error("連線失敗，請稍後再試");
+      return res.json();
+    });
+  }
+
+  function apiSaveRoom(id, groups, stats) {
+    return fetch("/api/rooms/" + encodeURIComponent(id), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groups: groups, stats: stats })
+    }).then(function (res) {
+      if (!res.ok) throw new Error("儲存失敗，請檢查網路連線");
+      return res.json();
+    });
+  }
+
+  function getRoomIdFromUrl() {
+    var v = new URLSearchParams(window.location.search).get("room");
+    return v ? v.trim().toUpperCase() : "";
+  }
+
+  function buildRoomLink(id) {
+    var url = new URL(window.location.href);
+    url.search = "?room=" + encodeURIComponent(id);
+    return url.toString();
+  }
+
+  function goToRoom(id) {
+    var url = new URL(window.location.href);
+    url.search = "?room=" + encodeURIComponent(id);
+    window.location.href = url.toString();
   }
 
   // ---- 週報網格：一次掃描，兒童／青職共用 ----
@@ -226,8 +246,6 @@
 
   // ---- 共用區塊（進度／表格／總計）算繪工廠 ----
 
-  var STORAGE_KEY = "statsGeneratorData_v1";
-
   function createSection(cfg) {
     var prefix = cfg.prefix;
     var metrics = cfg.metrics;
@@ -294,7 +312,6 @@
     }
 
     function buildRows(state) {
-      // returns [{type:'region', region, data}, {type:'congregation', name, data}, ...]
       var out = [];
       CONGREGATION_GROUPS.forEach(function (group) {
         var uploaded = group.members.filter(function (name) {
@@ -403,26 +420,14 @@
     };
   }
 
-  function loadDataState() {
-    try {
-      var raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  function saveDataState(state) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (e) {
-      /* storage unavailable, ignore */
-    }
+  function persist(statusEls) {
+    return apiSaveRoom(ROOM_ID, CONGREGATION_GROUPS, dataState).catch(function (err) {
+      if (statusEls) statusEls.showStatus("儲存失敗：" + err.message, "error");
+      throw err;
+    });
   }
 
   function initUploadAndSections() {
-    var state = loadDataState();
-
     var els = {
       select: document.getElementById("congregation-select"),
       dropzone: document.getElementById("dropzone"),
@@ -454,6 +459,7 @@
         els.parseBtn.disabled = true;
         return;
       }
+      els.parseBtn.disabled = false;
       CONGREGATION_GROUPS.forEach(function (group) {
         var optgroup = document.createElement("optgroup");
         optgroup.label = group.region;
@@ -523,14 +529,14 @@
     function removeCongregation(name) {
       var ok = window.confirm("確定要移除「" + name + "」的資料嗎？（兒童、青職資料會一併移除）");
       if (!ok) return;
-      delete state[name];
-      saveDataState(state);
+      delete dataState[name];
       renderAll();
+      persist({ showStatus: showStatus }).catch(function () {});
     }
 
     function renderAll() {
-      childrenSection.renderAll(state, removeCongregation);
-      youthSection.renderAll(state, removeCongregation);
+      childrenSection.renderAll(dataState, removeCongregation);
+      youthSection.renderAll(dataState, removeCongregation);
     }
 
     function onParseClick() {
@@ -552,7 +558,7 @@
         var childrenResult = deriveChildrenResult(scan);
         var youthResult = deriveYouthResult(scan);
 
-        var isUpdate = Object.prototype.hasOwnProperty.call(state, congregation);
+        var isUpdate = Object.prototype.hasOwnProperty.call(dataState, congregation);
         if (isUpdate) {
           var ok = window.confirm("「" + congregation + "」已經上傳過資料（兒童、青職），是否要用這個新檔案覆蓋？");
           if (!ok) {
@@ -561,20 +567,20 @@
           }
         }
 
-        state[congregation] = {
+        dataState[congregation] = {
           weeks: scan.weeks,
           children: childrenResult,
           youth: youthResult,
           fileName: pickedFile.name,
           updatedAt: new Date().toISOString()
         };
-        saveDataState(state);
         renderAll();
 
         showStatus(
           "已加入「" + congregation + "」：共 " + scan.weeks + " 週。" +
           "兒童 — 主日 " + formatNum(childrenResult.avgSunday) + "、召會生活 " + formatNum(childrenResult.avgLife) + "、小排 " + formatNum(childrenResult.avgGroup) + "；" +
-          "青職 — 主日 " + formatNum(youthResult.avgSunday) + "、家聚會 " + formatNum(youthResult.avgFamily) + "、小排 " + formatNum(youthResult.avgGroup) + "、生命讀經 " + formatNum(youthResult.avgLifeReading),
+          "青職 — 主日 " + formatNum(youthResult.avgSunday) + "、家聚會 " + formatNum(youthResult.avgFamily) + "、小排 " + formatNum(youthResult.avgGroup) + "、生命讀經 " + formatNum(youthResult.avgLifeReading) +
+          "（儲存中…）",
           "ok"
         );
 
@@ -582,6 +588,10 @@
         els.fileInput.value = "";
         els.filePicked.textContent = "";
         els.parseBtn.disabled = false;
+
+        persist({ showStatus: showStatus }).then(function () {
+          showStatus("已加入「" + congregation + "」並儲存到房間。", "ok");
+        }).catch(function () {});
       }).catch(function (err) {
         showStatus("解析失敗：" + err.message, "error");
         els.parseBtn.disabled = false;
@@ -589,23 +599,25 @@
     }
 
     function onResetAllClick() {
-      if (!Object.keys(state).length) return;
+      if (!Object.keys(dataState).length) return;
       var ok = window.confirm("確定要清除所有已上傳的召會資料嗎？（兒童、青職資料會一併清除，此操作無法復原）");
       if (!ok) return;
-      state = {};
-      saveDataState(state);
+      dataState = {};
       renderAll();
       clearStatus();
+      persist({ showStatus: showStatus }).catch(function () {});
     }
 
     initSelect();
     setupDropzone();
     els.parseBtn.addEventListener("click", onParseClick);
     els.resetAllBtn.addEventListener("click", onResetAllClick);
-    childrenSection.bindDownloadButton(function () { return state; });
-    youthSection.bindDownloadButton(function () { return state; });
+    childrenSection.bindDownloadButton(function () { return dataState; });
+    youthSection.bindDownloadButton(function () { return dataState; });
 
     renderAll();
+
+    return { initSelect: initSelect, renderAll: renderAll };
   }
 
   function initTabs() {
@@ -653,7 +665,7 @@
     return groups.filter(function (g) { return g.members.length > 0; });
   }
 
-  function initSettingsModal() {
+  function initSettingsModal(app) {
     var openBtn = document.getElementById("open-settings-btn");
     var backdrop = document.getElementById("settings-backdrop");
     var textarea = document.getElementById("settings-textarea");
@@ -670,7 +682,7 @@
     }
 
     function open() {
-      textarea.value = groupsToText(loadCongregationGroups());
+      textarea.value = groupsToText(CONGREGATION_GROUPS);
       updateCount();
       backdrop.style.display = "flex";
     }
@@ -679,6 +691,7 @@
       backdrop.style.display = "none";
     }
 
+    openBtn.style.display = "";
     openBtn.addEventListener("click", open);
     cancelBtn.addEventListener("click", close);
     backdrop.addEventListener("click", function (e) {
@@ -697,16 +710,161 @@
     });
 
     saveBtn.addEventListener("click", function () {
+      saveBtn.disabled = true;
       var groups = textToGroups(textarea.value);
-      saveCongregationGroups(groups);
-      window.location.reload();
+      CONGREGATION_GROUPS = normalizeGroups(groups) || [];
+      CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
+      persist().then(function () {
+        saveBtn.disabled = false;
+        close();
+        app.initSelect();
+        app.renderAll();
+      }).catch(function () {
+        saveBtn.disabled = false;
+      });
     });
+  }
+
+  function initLandingAndRoom() {
+    var landing = document.getElementById("landing-screen");
+    var roomBar = document.getElementById("room-bar");
+    var appMain = document.getElementById("app-main");
+    var createBtn = document.getElementById("create-room-btn");
+    var joinInput = document.getElementById("join-room-input");
+    var joinBtn = document.getElementById("join-room-btn");
+    var landingStatus = document.getElementById("landing-status-msg");
+    var roomCodeDisplay = document.getElementById("room-code-display");
+    var copyLinkBtn = document.getElementById("copy-room-link-btn");
+    var refreshBtn = document.getElementById("refresh-room-btn");
+    var leaveBtn = document.getElementById("leave-room-btn");
+
+    function showLandingStatus(message, type) {
+      landingStatus.textContent = message;
+      landingStatus.className = "status-msg show " + type;
+    }
+
+    createBtn.addEventListener("click", function () {
+      createBtn.disabled = true;
+      apiCreateRoom().then(function (data) {
+        goToRoom(data.id);
+      }).catch(function (err) {
+        createBtn.disabled = false;
+        showLandingStatus("建立房間失敗：" + err.message, "error");
+      });
+    });
+
+    function doJoin() {
+      var code = joinInput.value.trim().toUpperCase();
+      if (!code) {
+        showLandingStatus("請輸入房間代碼", "error");
+        return;
+      }
+      goToRoom(code);
+    }
+
+    joinBtn.addEventListener("click", doJoin);
+    joinInput.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") doJoin();
+    });
+
+    leaveBtn.addEventListener("click", function () {
+      var url = new URL(window.location.href);
+      url.search = "";
+      window.location.href = url.toString();
+    });
+
+    copyLinkBtn.addEventListener("click", function () {
+      var link = buildRoomLink(ROOM_ID);
+      var restoreText = copyLinkBtn.textContent;
+      var flash = function (text) {
+        copyLinkBtn.textContent = text;
+        setTimeout(function () { copyLinkBtn.textContent = restoreText; }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(function () {
+          flash("已複製！");
+        }).catch(function () {
+          window.prompt("複製這個連結：", link);
+        });
+      } else {
+        window.prompt("複製這個連結：", link);
+      }
+    });
+
+    var refreshHandler = null;
+    refreshBtn.addEventListener("click", function () {
+      if (refreshHandler) refreshHandler();
+    });
+
+    function boot() {
+      ROOM_ID = getRoomIdFromUrl();
+      if (!ROOM_ID) {
+        landing.style.display = "";
+        return;
+      }
+
+      landing.style.display = "";
+      showLandingStatus("正在連線到房間 " + ROOM_ID + " …", "ok");
+      createBtn.disabled = true;
+      joinBtn.disabled = true;
+
+      loadRoom();
+    }
+
+    function loadRoom() {
+      apiFetchRoom(ROOM_ID).then(function (data) {
+        CONGREGATION_GROUPS = normalizeGroups(data.groups) || [];
+        CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
+        dataState = data.stats && typeof data.stats === "object" ? data.stats : {};
+
+        landing.style.display = "none";
+        roomBar.style.display = "flex";
+        appMain.style.display = "";
+        roomCodeDisplay.textContent = ROOM_ID;
+
+        var app = window.__statsApp;
+        if (!app) {
+          app = initUploadAndSections();
+          initSettingsModal(app);
+          window.__statsApp = app;
+        } else {
+          app.initSelect();
+          app.renderAll();
+        }
+
+        refreshHandler = function () {
+          refreshBtn.disabled = true;
+          apiFetchRoom(ROOM_ID).then(function (fresh) {
+            CONGREGATION_GROUPS = normalizeGroups(fresh.groups) || CONGREGATION_GROUPS;
+            CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
+            dataState = fresh.stats && typeof fresh.stats === "object" ? fresh.stats : {};
+            app.initSelect();
+            app.renderAll();
+            refreshBtn.disabled = false;
+          }).catch(function () {
+            refreshBtn.disabled = false;
+          });
+        };
+      }).catch(function (err) {
+        landing.style.display = "";
+        roomBar.style.display = "none";
+        appMain.style.display = "none";
+        createBtn.disabled = false;
+        joinBtn.disabled = false;
+        if (err.notFound) {
+          showLandingStatus("找不到房間代碼「" + ROOM_ID + "」，請確認代碼或建立新房間。", "error");
+        } else {
+          showLandingStatus("連線失敗：" + err.message, "error");
+        }
+      });
+    }
+
+    boot();
   }
 
   function init() {
     initTabs();
-    initSettingsModal();
-    initUploadAndSections();
+    initLandingAndRoom();
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {

@@ -1,4 +1,4 @@
-const CACHE_NAME = "stats-cache-v6";
+const CACHE_NAME = "stats-cache-v7";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -34,6 +34,7 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   var request = event.request;
+  if (new URL(request.url).pathname.startsWith("/api/")) return;
 
   event.respondWith(
     fetch(request).then((response) => {

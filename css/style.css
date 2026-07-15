@@ -491,6 +491,57 @@ td.congregation-name {
   flex: 1 1 auto;
 }
 
+.join-room-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.join-room-row button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.join-room-row input {
+  flex: 1 1 auto;
+  padding: 0.6rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.95rem;
+  font-family: inherit;
+  min-width: 0;
+}
+
+.room-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+}
+
+.room-bar strong {
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+
+.room-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.room-bar-actions button {
+  font-size: 0.82rem;
+  padding: 0.4rem 0.7rem;
+}
+
 footer.app-footer {
   max-width: 920px;
   margin: 0 auto;

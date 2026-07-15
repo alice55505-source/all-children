@@ -32,9 +32,36 @@
         <h1>全台專項統計產生器</h1>
         <p>上傳各召會週報，自動算出各項每週平均，並彙總全台總計。</p>
       </div>
-      <button class="btn-secondary settings-btn" id="open-settings-btn">⚙ 設定召會</button>
+      <button class="btn-secondary settings-btn" id="open-settings-btn" style="display:none;">⚙ 設定召會</button>
     </div>
   </header>
+
+  <section class="card" id="landing-screen">
+    <h2>開始使用</h2>
+    <p class="modal-hint">建立一個新房間跟團隊共用資料，或輸入已有的房間代碼加入同一個房間。同一個房間的人看到、上傳的是同一份資料。</p>
+    <div class="card-actions">
+      <button class="btn-primary" id="create-room-btn">建立新房間</button>
+    </div>
+    <div class="field" style="margin-top:1rem;">
+      <label for="join-room-input">輸入房間代碼加入</label>
+      <div class="join-room-row">
+        <input type="text" id="join-room-input" placeholder="例如 ABC123" maxlength="12" />
+        <button class="btn-secondary" id="join-room-btn">加入</button>
+      </div>
+    </div>
+    <div class="status-msg" id="landing-status-msg"></div>
+  </section>
+
+  <div class="room-bar" id="room-bar" style="display:none;">
+    <span>房間代碼：<strong id="room-code-display"></strong></span>
+    <div class="room-bar-actions">
+      <button class="btn-secondary" id="copy-room-link-btn">複製邀請連結</button>
+      <button class="btn-secondary" id="refresh-room-btn">重新整理資料</button>
+      <button class="btn-secondary" id="leave-room-btn">離開房間</button>
+    </div>
+  </div>
+
+  <div id="app-main" style="display:none;">
 
   <section class="card">
     <h2>1. 上傳報表 <span class="badge">選擇召會後上傳，一次算出兒童＋青職</span></h2>
@@ -143,8 +170,10 @@
   </div>
 
   <footer class="app-footer">
-    全台總計為已上傳召會之數值加總。資料僅儲存在本機瀏覽器（localStorage），不會上傳到任何伺服器。
+    全台總計為已上傳召會之數值加總。資料儲存在這個房間專屬的雲端資料庫，只有知道房間代碼／連結的人看得到。
   </footer>
+
+  </div>
 </div>
 
 <div class="modal-backdrop" id="settings-backdrop" style="display:none;">
