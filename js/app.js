@@ -1,14 +1,14 @@
 (function () {
   "use strict";
 
-  var DEFAULT_CONGREGATIONS = [
-    "斗六", "古坑", "林內", "西螺", "莿桐", "斗南", "虎尾", "土庫",
-    "崙背", "褒忠", "二崙", "麥寮", "北港", "口湖", "嘉義市", "中埔",
-    "竹崎", "番路", "民雄", "溪口", "大林", "新港", "六腳", "朴子",
-    "布袋", "鹿草", "太保", "水上"
+  var DEFAULT_GROUPS = [
+    { region: "雲東區", members: ["斗六", "古坑", "林內", "西螺", "莿桐", "斗南"] },
+    { region: "雲西區", members: ["虎尾", "土庫", "崙背", "褒忠", "二崙", "麥寮", "北港", "口湖"] },
+    { region: "嘉義區", members: ["嘉義市（梅山）", "中埔", "竹崎", "番路"] },
+    { region: "民雄區", members: ["民雄", "溪口", "大林", "新港", "(六腳)"] },
+    { region: "朴子區", members: ["朴子", "布袋", "鹿草", "太保", "水上"] }
   ];
   var DEFAULT_REGION_NAME = "未分區";
-  var DEFAULT_GROUPS = [{ region: DEFAULT_REGION_NAME, members: DEFAULT_CONGREGATIONS.slice() }];
 
   var GROUPS_STORAGE_KEY = "congregationGroups_v1";
   var LEGACY_FLAT_STORAGE_KEY = "congregationList_v1";
