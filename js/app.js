@@ -135,22 +135,26 @@
       throw new Error("「" + GRID_SHEET_NAME + "」分頁是空的");
     }
 
+    // The header row's exact label text has changed between report template
+    // versions (區/排 vs 大區/區), so anchor on the first week-code cell
+    // (e.g. "2026W28") instead - it's the stable structural marker. The
+    // group/合計 label column is always the one immediately to its left.
     var headerRowIdx = -1;
     var groupColIdx = -1;
     for (var r = 0; r < rows.length && headerRowIdx === -1; r++) {
       var row = rows[r];
       if (!row) continue;
-      for (var c = 0; c < row.length - 1; c++) {
-        if (String(row[c] || "").trim() === "區" && String(row[c + 1] || "").trim() === "排") {
+      for (var c = 1; c < row.length; c++) {
+        if (row[c] != null && GRID_WEEK_PATTERN.test(String(row[c]).trim())) {
           headerRowIdx = r;
-          groupColIdx = c + 1;
+          groupColIdx = c - 1;
           break;
         }
       }
     }
 
     if (headerRowIdx === -1) {
-      throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到「區」「排」表頭");
+      throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到週別欄位（例如 2026W28）");
     }
 
     var weekRow = rows[headerRowIdx];
