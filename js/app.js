@@ -110,9 +110,8 @@
       小排: findHeaderIndex(header, "小排")
     };
 
-    var missing = Object.keys(idx).filter(function (key) { return idx[key] === -1; });
-    if (missing.length) {
-      throw new Error("在「" + WEEKLY_SHEET_NAME + "」分頁找不到欄位：" + missing.join("、"));
+    if (idx.區排 === -1) {
+      throw new Error("在「" + WEEKLY_SHEET_NAME + "」分頁找不到欄位：區排");
     }
 
     var sums = { 主日: 0, 小排: 0 };
@@ -124,8 +123,8 @@
       var label = row[idx.區排];
       if (label != null && String(label).trim() === TOTAL_LABEL) {
         weeks++;
-        sums.主日 += Number(row[idx.主日]) || 0;
-        sums.小排 += Number(row[idx.小排]) || 0;
+        sums.主日 += idx.主日 === -1 ? 0 : (Number(row[idx.主日]) || 0);
+        sums.小排 += idx.小排 === -1 ? 0 : (Number(row[idx.小排]) || 0);
       }
     }
 
@@ -141,9 +140,7 @@
   }
 
   function parseLifeKpi(sheet) {
-    if (!sheet) {
-      throw new Error("找不到「" + SUMMARY_SHEET_NAME + "」分頁，請確認上傳的檔案格式");
-    }
+    if (!sheet) return 0;
 
     var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
     for (var i = 0; i < rows.length; i++) {
@@ -155,7 +152,7 @@
       }
     }
 
-    throw new Error("在「" + SUMMARY_SHEET_NAME + "」分頁找不到「" + LIFE_KPI_LABEL + "」");
+    return 0;
   }
 
   function parseWorkbook(workbook) {
