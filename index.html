@@ -36,37 +36,37 @@
     </div>
   </header>
 
+  <section class="card">
+    <h2>1. 上傳報表 <span class="badge">選擇召會後上傳，一次算出兒童＋青職</span></h2>
+
+    <div class="field">
+      <label for="congregation-select">召會</label>
+      <select id="congregation-select"></select>
+    </div>
+
+    <div class="field">
+      <label for="file-input">週報 Excel 檔（.xlsx，含「週報網格」分頁）</label>
+      <div class="dropzone" id="dropzone">
+        將檔案拖曳到這裡，或點擊選擇檔案
+        <input type="file" id="file-input" accept=".xlsx" style="margin-top:0.6rem;" />
+      </div>
+      <div class="file-picked" id="file-picked"></div>
+    </div>
+
+    <div class="upload-actions">
+      <button class="btn-primary" id="parse-btn">解析並加入</button>
+      <button class="btn-secondary" id="reset-all-btn">清除全部資料</button>
+    </div>
+
+    <div class="status-msg" id="status-msg"></div>
+  </section>
+
   <nav class="tab-nav">
     <button class="tab-btn active" data-tab-target="children">兒童</button>
     <button class="tab-btn" data-tab-target="youth">青職</button>
   </nav>
 
   <div data-tab-panel="children">
-    <section class="card">
-      <h2>1. 上傳報表 <span class="badge">選擇召會後上傳</span></h2>
-
-      <div class="field">
-        <label for="children-congregation-select">召會</label>
-        <select id="children-congregation-select"></select>
-      </div>
-
-      <div class="field">
-        <label for="children-file-input">週報 Excel 檔（.xlsx，含「週報矩陣」「摘要」分頁）</label>
-        <div class="dropzone" id="children-dropzone">
-          將檔案拖曳到這裡，或點擊選擇檔案
-          <input type="file" id="children-file-input" accept=".xlsx" style="margin-top:0.6rem;" />
-        </div>
-        <div class="file-picked" id="children-file-picked"></div>
-      </div>
-
-      <div class="upload-actions">
-        <button class="btn-primary" id="children-parse-btn">解析並加入</button>
-        <button class="btn-secondary" id="children-reset-all-btn">清除全部資料</button>
-      </div>
-
-      <div class="status-msg" id="children-status-msg"></div>
-    </section>
-
     <section class="card">
       <h2>2. 上傳進度</h2>
       <div class="progress-row">
@@ -100,36 +100,11 @@
     </section>
 
     <p class="tab-footnote">
-      主日、小排為「週報矩陣」分頁中「合計」列的每週平均值；召會生活為「摘要」分頁 KPI 中「期間有召會生活」的人數。
+      主日 =「週報網格」最後「兒童」小計欄 +「主日」類別的「國小」欄；召會生活、小排皆為「學齡前」+「國小」的每週平均。
     </p>
   </div>
 
   <div data-tab-panel="youth" style="display:none;">
-    <section class="card">
-      <h2>1. 上傳報表 <span class="badge">選擇召會後上傳</span></h2>
-
-      <div class="field">
-        <label for="youth-congregation-select">召會</label>
-        <select id="youth-congregation-select"></select>
-      </div>
-
-      <div class="field">
-        <label for="youth-file-input">週報 Excel 檔（.xlsx，含「週報網格」分頁）</label>
-        <div class="dropzone" id="youth-dropzone">
-          將檔案拖曳到這裡，或點擊選擇檔案
-          <input type="file" id="youth-file-input" accept=".xlsx" style="margin-top:0.6rem;" />
-        </div>
-        <div class="file-picked" id="youth-file-picked"></div>
-      </div>
-
-      <div class="upload-actions">
-        <button class="btn-primary" id="youth-parse-btn">解析並加入</button>
-        <button class="btn-secondary" id="youth-reset-all-btn">清除全部資料</button>
-      </div>
-
-      <div class="status-msg" id="youth-status-msg"></div>
-    </section>
-
     <section class="card">
       <h2>2. 上傳進度</h2>
       <div class="progress-row">

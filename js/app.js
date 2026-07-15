@@ -33,13 +33,6 @@
 
   var TOTAL_LABEL = "合計";
 
-  function findHeaderIndex(header, name) {
-    for (var i = 0; i < header.length; i++) {
-      if (header[i] === name) return i;
-    }
-    return -1;
-  }
-
   function getSheet(workbook, preferredName, fallbackIndex) {
     var sheet = workbook.Sheets[preferredName];
     if (!sheet) {
@@ -53,98 +46,10 @@
     return Math.round(n * 10) / 10;
   }
 
-  // ---- 兒童：週報矩陣 + 摘要 ----
+  // ---- 週報網格：一次掃描，兒童／青職共用 ----
 
-  var CHILDREN_WEEKLY_SHEET_NAME = "週報矩陣";
-  var CHILDREN_SUMMARY_SHEET_NAME = "摘要";
-  var CHILDREN_LIFE_KPI_LABEL = "期間有召會生活";
-
-  function parseChildrenWeeklyMatrix(sheet) {
-    if (!sheet) {
-      throw new Error("找不到「" + CHILDREN_WEEKLY_SHEET_NAME + "」分頁，請確認上傳的檔案格式");
-    }
-
-    var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-    if (!rows.length) {
-      throw new Error("「" + CHILDREN_WEEKLY_SHEET_NAME + "」分頁是空的");
-    }
-
-    var header = rows[0].map(function (cell) {
-      return cell == null ? "" : String(cell).trim();
-    });
-
-    var idx = {
-      區排: findHeaderIndex(header, "區排"),
-      主日: findHeaderIndex(header, "主日"),
-      小排: findHeaderIndex(header, "小排")
-    };
-
-    if (idx.區排 === -1) {
-      throw new Error("在「" + CHILDREN_WEEKLY_SHEET_NAME + "」分頁找不到欄位：區排");
-    }
-
-    var sums = { 主日: 0, 小排: 0 };
-    var weeks = 0;
-
-    for (var i = 1; i < rows.length; i++) {
-      var row = rows[i];
-      if (!row) continue;
-      var label = row[idx.區排];
-      if (label != null && String(label).trim() === TOTAL_LABEL) {
-        weeks++;
-        sums.主日 += idx.主日 === -1 ? 0 : (Number(row[idx.主日]) || 0);
-        sums.小排 += idx.小排 === -1 ? 0 : (Number(row[idx.小排]) || 0);
-      }
-    }
-
-    if (weeks === 0) {
-      throw new Error("在「" + CHILDREN_WEEKLY_SHEET_NAME + "」分頁中找不到「" + TOTAL_LABEL + "」列");
-    }
-
-    return {
-      weeks: weeks,
-      avgSunday: sums.主日 / weeks,
-      avgGroup: sums.小排 / weeks
-    };
-  }
-
-  function parseChildrenLifeKpi(sheet) {
-    if (!sheet) return 0;
-
-    var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-    for (var i = 0; i < rows.length; i++) {
-      var row = rows[i];
-      if (!row) continue;
-      var label = row[0];
-      if (label != null && String(label).trim() === CHILDREN_LIFE_KPI_LABEL) {
-        return Number(row[1]) || 0;
-      }
-    }
-
-    return 0;
-  }
-
-  function parseChildrenWorkbook(workbook) {
-    var weeklySheet = getSheet(workbook, CHILDREN_WEEKLY_SHEET_NAME, 2);
-    var summarySheet = getSheet(workbook, CHILDREN_SUMMARY_SHEET_NAME, 1);
-
-    var weekly = parseChildrenWeeklyMatrix(weeklySheet);
-    var lifeCount = parseChildrenLifeKpi(summarySheet);
-
-    return {
-      weeks: weekly.weeks,
-      avgSunday: weekly.avgSunday,
-      avgGroup: weekly.avgGroup,
-      lifeCount: lifeCount
-    };
-  }
-
-  // ---- 青職：週報網格 ----
-
-  var YOUTH_SHEET_NAME = "週報網格";
-  var YOUTH_AGE_LABEL = "青職";
-  var YOUTH_WEEK_PATTERN = /^\d+W\d+$/;
-  var YOUTH_TARGET_CATEGORIES = ["主日", "家聚會出訪", "家聚會受訪", "小排", "生命讀經"];
+  var GRID_SHEET_NAME = "週報網格";
+  var GRID_WEEK_PATTERN = /^\d+W\d+$/;
 
   function fillForward(row, startCol) {
     var out = [];
@@ -158,15 +63,15 @@
     return out;
   }
 
-  function parseYouthWorkbook(workbook) {
-    var sheet = getSheet(workbook, YOUTH_SHEET_NAME, 0);
+  function scanWeeklyGrid(workbook) {
+    var sheet = getSheet(workbook, GRID_SHEET_NAME, 0);
     if (!sheet) {
-      throw new Error("找不到「" + YOUTH_SHEET_NAME + "」分頁，請確認上傳的檔案格式");
+      throw new Error("找不到「" + GRID_SHEET_NAME + "」分頁，請確認上傳的檔案格式");
     }
 
     var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
     if (!rows.length) {
-      throw new Error("「" + YOUTH_SHEET_NAME + "」分頁是空的");
+      throw new Error("「" + GRID_SHEET_NAME + "」分頁是空的");
     }
 
     var headerRowIdx = -1;
@@ -184,7 +89,7 @@
     }
 
     if (headerRowIdx === -1) {
-      throw new Error("在「" + YOUTH_SHEET_NAME + "」分頁找不到「區」「排」表頭");
+      throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到「區」「排」表頭");
     }
 
     var weekRow = rows[headerRowIdx];
@@ -192,7 +97,7 @@
     var ageRow = rows[headerRowIdx + 2];
 
     if (!categoryRow || !ageRow) {
-      throw new Error("在「" + YOUTH_SHEET_NAME + "」分頁找不到分類或身份列");
+      throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到分類或身份列");
     }
 
     var weekPerCol = fillForward(weekRow, groupColIdx + 1);
@@ -202,15 +107,15 @@
     var width = Math.max(weekRow.length, categoryRow.length, ageRow.length);
     for (var col = groupColIdx + 1; col < width; col++) {
       var wk = weekPerCol[col];
+      if (!wk || !GRID_WEEK_PATTERN.test(wk)) continue;
       var cat = catPerCol[col];
-      var age = ageRow[col] != null ? String(ageRow[col]).trim() : null;
-      if (wk && YOUTH_WEEK_PATTERN.test(wk) && age === YOUTH_AGE_LABEL && YOUTH_TARGET_CATEGORIES.indexOf(cat) !== -1) {
-        matches.push({ week: wk, cat: cat, col: col });
-      }
+      if (!cat) continue;
+      var age = ageRow[col] != null ? String(ageRow[col]).trim() : "";
+      matches.push({ week: wk, key: cat + "|" + age, col: col });
     }
 
     if (!matches.length) {
-      throw new Error("在「" + YOUTH_SHEET_NAME + "」分頁找不到「" + YOUTH_AGE_LABEL + "」欄位資料");
+      throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到任何週別欄位資料");
     }
 
     var dataStart = headerRowIdx + 3;
@@ -229,7 +134,7 @@
     }
 
     if (!aggRow && !dataRows.length) {
-      throw new Error("在「" + YOUTH_SHEET_NAME + "」分頁找不到任何資料列");
+      throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到任何資料列");
     }
 
     var sums = {};
@@ -249,41 +154,47 @@
           return acc + (Number(dr[m.col]) || 0);
         }, 0);
       }
-      sums[m.cat] = (sums[m.cat] || 0) + value;
+      sums[m.key] = (sums[m.key] || 0) + value;
     });
 
-    var get = function (key) { return sums[key] || 0; };
+    return { weeks: weeksCount, sums: sums };
+  }
 
+  function deriveChildrenResult(scan) {
+    var get = function (cat, age) { return scan.sums[cat + "|" + age] || 0; };
+    var weeks = scan.weeks;
     return {
-      weeks: weeksCount,
-      avgSunday: get("主日") / weeksCount,
-      avgFamily: (get("家聚會出訪") + get("家聚會受訪")) / weeksCount,
-      avgGroup: get("小排") / weeksCount,
-      avgLifeReading: get("生命讀經") / weeksCount
+      weeks: weeks,
+      avgSunday: (get("兒童", "小計") + get("主日", "國小")) / weeks,
+      avgGroup: (get("小排", "學齡前") + get("小排", "國小")) / weeks,
+      avgLife: (get("召會生活", "學齡前") + get("召會生活", "國小")) / weeks
     };
   }
 
-  // ---- 共用模組工廠 ----
+  function deriveYouthResult(scan) {
+    var get = function (cat, age) { return scan.sums[cat + "|" + age] || 0; };
+    var weeks = scan.weeks;
+    return {
+      weeks: weeks,
+      avgSunday: get("主日", "青職") / weeks,
+      avgFamily: (get("家聚會出訪", "青職") + get("家聚會受訪", "青職")) / weeks,
+      avgGroup: get("小排", "青職") / weeks,
+      avgLifeReading: get("生命讀經", "青職") / weeks
+    };
+  }
 
-  function createStatsModule(cfg) {
+  // ---- 共用區塊（進度／表格／總計）算繪工廠 ----
+
+  var STORAGE_KEY = "statsGeneratorData_v1";
+
+  function createSection(cfg) {
     var prefix = cfg.prefix;
-    var storageKey = cfg.storageKey;
-    var parseFn = cfg.parseFn;
     var metrics = cfg.metrics;
-
-    var state = loadState();
-    var pickedFile = null;
+    var extract = cfg.extract;
 
     function id(name) { return document.getElementById(prefix + "-" + name); }
 
     var els = {
-      select: id("congregation-select"),
-      dropzone: id("dropzone"),
-      fileInput: id("file-input"),
-      filePicked: id("file-picked"),
-      parseBtn: id("parse-btn"),
-      resetAllBtn: id("reset-all-btn"),
-      statusMsg: id("status-msg"),
       progressCount: id("progress-count"),
       progressTotal: id("progress-total"),
       progressBar: id("progress-bar"),
@@ -296,21 +207,182 @@
       copySummaryBtn: id("copy-summary-btn")
     };
 
-    function loadState() {
-      try {
-        var raw = localStorage.getItem(storageKey);
-        return raw ? JSON.parse(raw) : {};
-      } catch (e) {
-        return {};
+    function initTableHeader() {
+      var html = "<th>召會</th><th>週數</th>";
+      metrics.forEach(function (m) { html += "<th>" + m.label + "</th>"; });
+      els.resultsTheadRow.innerHTML = html;
+    }
+
+    function initSummaryGrid() {
+      var html = "";
+      metrics.forEach(function (m) {
+        html +=
+          '<div class="stat-tile">' +
+          '<div class="stat-label">' + m.totalLabel + "</div>" +
+          '<div class="stat-value" id="' + prefix + "-total-" + m.key + '">0</div>' +
+          "</div>";
+      });
+      els.summaryGrid.innerHTML = html;
+    }
+
+    function renderChecklist(state) {
+      var uploadedCount = 0;
+      els.chipGrid.innerHTML = "";
+      CONGREGATIONS.forEach(function (name) {
+        var chip = document.createElement("span");
+        var done = Object.prototype.hasOwnProperty.call(state, name);
+        if (done) uploadedCount++;
+        chip.className = "chip" + (done ? " done" : "");
+        chip.textContent = name;
+        els.chipGrid.appendChild(chip);
+      });
+      els.progressCount.textContent = uploadedCount;
+      els.progressTotal.textContent = CONGREGATIONS.length;
+      els.progressBar.style.width = (CONGREGATIONS.length ? (uploadedCount / CONGREGATIONS.length * 100) : 0) + "%";
+    }
+
+    function renderTable(state, onRemove) {
+      els.resultsTbody.innerHTML = "";
+      var names = CONGREGATIONS.filter(function (name) {
+        return Object.prototype.hasOwnProperty.call(state, name);
+      });
+
+      els.resultsEmpty.style.display = names.length ? "none" : "block";
+
+      names.forEach(function (name) {
+        var d = extract(state[name]);
+        var html = "<td>" + name + "</td><td>" + d.weeks + "</td>";
+        metrics.forEach(function (m) {
+          html += "<td>" + formatNum(d[m.key]) + "</td>";
+        });
+        html += "<td><button class=\"btn-danger-ghost\" data-remove=\"" + name + "\">移除</button></td>";
+        var tr = document.createElement("tr");
+        tr.innerHTML = html;
+        els.resultsTbody.appendChild(tr);
+      });
+
+      els.resultsTbody.querySelectorAll("[data-remove]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          onRemove(btn.getAttribute("data-remove"));
+        });
+      });
+    }
+
+    function renderSummary(state) {
+      var totals = {};
+      metrics.forEach(function (m) { totals[m.key] = 0; });
+      Object.keys(state).forEach(function (name) {
+        var d = extract(state[name]);
+        metrics.forEach(function (m) { totals[m.key] += d[m.key] || 0; });
+      });
+
+      metrics.forEach(function (m) {
+        var el = document.getElementById(prefix + "-total-" + m.key);
+        if (el) el.textContent = formatNum(totals[m.key]);
+      });
+
+      var missing = CONGREGATIONS.filter(function (name) {
+        return !Object.prototype.hasOwnProperty.call(state, name);
+      });
+
+      if (missing.length) {
+        els.summaryWarn.style.display = "block";
+        els.summaryWarn.textContent =
+          "尚有 " + missing.length + " 個召會未上傳（" + missing.join("、") + "），以上總計僅計入已上傳的召會。";
+      } else {
+        els.summaryWarn.style.display = "none";
+      }
+
+      return totals;
+    }
+
+    function onCopySummaryClick(state) {
+      var uploadedNames = CONGREGATIONS.filter(function (name) {
+        return Object.prototype.hasOwnProperty.call(state, name);
+      });
+      var totals = {};
+      metrics.forEach(function (m) { totals[m.key] = 0; });
+      uploadedNames.forEach(function (name) {
+        var d = extract(state[name]);
+        metrics.forEach(function (m) { totals[m.key] += d[m.key] || 0; });
+      });
+
+      var lines = [];
+      lines.push(cfg.summaryTitle + "（已上傳 " + uploadedNames.length + " / " + CONGREGATIONS.length + " 個召會）");
+      metrics.forEach(function (m) {
+        lines.push(m.totalLabel + "：" + formatNum(totals[m.key]));
+      });
+
+      var text = lines.join("\n");
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          window.showGlobalStatus("已複製總計文字", "ok");
+        }).catch(function () {
+          window.prompt("複製以下文字：", text);
+        });
+      } else {
+        window.prompt("複製以下文字：", text);
       }
     }
 
-    function saveState() {
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(state));
-      } catch (e) {
-        /* storage unavailable, ignore */
+    initTableHeader();
+    initSummaryGrid();
+
+    return {
+      renderAll: function (state, onRemove) {
+        renderChecklist(state);
+        renderTable(state, onRemove);
+        renderSummary(state);
+      },
+      bindCopyButton: function (getState) {
+        els.copySummaryBtn.addEventListener("click", function () {
+          onCopySummaryClick(getState());
+        });
       }
+    };
+  }
+
+  function loadDataState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function saveDataState(state) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      /* storage unavailable, ignore */
+    }
+  }
+
+  function initUploadAndSections() {
+    var state = loadDataState();
+
+    var els = {
+      select: document.getElementById("congregation-select"),
+      dropzone: document.getElementById("dropzone"),
+      fileInput: document.getElementById("file-input"),
+      filePicked: document.getElementById("file-picked"),
+      parseBtn: document.getElementById("parse-btn"),
+      resetAllBtn: document.getElementById("reset-all-btn"),
+      statusMsg: document.getElementById("status-msg")
+    };
+
+    var pickedFile = null;
+
+    function showStatus(message, type) {
+      els.statusMsg.textContent = message;
+      els.statusMsg.className = "status-msg show " + type;
+    }
+    window.showGlobalStatus = showStatus;
+
+    function clearStatus() {
+      els.statusMsg.className = "status-msg";
     }
 
     function initSelect() {
@@ -329,36 +401,6 @@
         opt.textContent = name;
         els.select.appendChild(opt);
       });
-    }
-
-    function initTableHeader() {
-      var html = "<th>召會</th><th>週數</th>";
-      metrics.forEach(function (m) {
-        html += "<th>" + m.label + "</th>";
-      });
-      html += "<th>操作</th>";
-      els.resultsTheadRow.innerHTML = html;
-    }
-
-    function initSummaryGrid() {
-      var html = "";
-      metrics.forEach(function (m) {
-        html +=
-          '<div class="stat-tile">' +
-          '<div class="stat-label">' + m.totalLabel + "</div>" +
-          '<div class="stat-value" id="' + prefix + "-total-" + m.key + '">0</div>' +
-          "</div>";
-      });
-      els.summaryGrid.innerHTML = html;
-    }
-
-    function showStatus(message, type) {
-      els.statusMsg.textContent = message;
-      els.statusMsg.className = "status-msg show " + type;
-    }
-
-    function clearStatus() {
-      els.statusMsg.className = "status-msg";
     }
 
     function handleFileSelected(file) {
@@ -382,15 +424,47 @@
       });
       dz.addEventListener("drop", function (e) {
         var files = e.dataTransfer.files;
-        if (files && files.length) {
-          handleFileSelected(files[0]);
-        }
+        if (files && files.length) handleFileSelected(files[0]);
       });
       els.fileInput.addEventListener("change", function (e) {
-        if (e.target.files && e.target.files.length) {
-          handleFileSelected(e.target.files[0]);
-        }
+        if (e.target.files && e.target.files.length) handleFileSelected(e.target.files[0]);
       });
+    }
+
+    var childrenSection = createSection({
+      prefix: "children",
+      summaryTitle: "全台兒童統計",
+      extract: function (entry) { return entry.children; },
+      metrics: [
+        { key: "avgSunday", label: "主日（週平均）", totalLabel: "主日總計" },
+        { key: "avgLife", label: "召會生活（週平均）", totalLabel: "召會生活總計" },
+        { key: "avgGroup", label: "小排（週平均）", totalLabel: "小排總計" }
+      ]
+    });
+
+    var youthSection = createSection({
+      prefix: "youth",
+      summaryTitle: "全台青職統計",
+      extract: function (entry) { return entry.youth; },
+      metrics: [
+        { key: "avgSunday", label: "主日（週平均）", totalLabel: "主日總計" },
+        { key: "avgFamily", label: "家聚會（出訪+受訪，週平均）", totalLabel: "家聚會總計" },
+        { key: "avgGroup", label: "小排（週平均）", totalLabel: "小排總計" },
+        { key: "avgLifeReading", label: "生命讀經（週平均）", totalLabel: "生命讀經總計" }
+      ]
+    });
+
+    function removeCongregation(name) {
+      var ok = window.confirm("確定要移除「" + name + "」的資料嗎？（兒童、青職資料會一併移除）");
+      if (!ok) return;
+      delete state[name];
+      saveDataState(state);
+      renderAll();
+    }
+
+    function renderAll() {
+      childrenSection.renderAll(state, removeCongregation);
+      youthSection.renderAll(state, removeCongregation);
     }
 
     function onParseClick() {
@@ -408,29 +482,33 @@
 
       pickedFile.arrayBuffer().then(function (buf) {
         var workbook = XLSX.read(buf, { type: "array" });
-        var result = parseFn(workbook);
-        var isUpdate = Object.prototype.hasOwnProperty.call(state, congregation);
+        var scan = scanWeeklyGrid(workbook);
+        var childrenResult = deriveChildrenResult(scan);
+        var youthResult = deriveYouthResult(scan);
 
+        var isUpdate = Object.prototype.hasOwnProperty.call(state, congregation);
         if (isUpdate) {
-          var ok = window.confirm("「" + congregation + "」已經上傳過資料，是否要用這個新檔案覆蓋？");
+          var ok = window.confirm("「" + congregation + "」已經上傳過資料（兒童、青職），是否要用這個新檔案覆蓋？");
           if (!ok) {
             els.parseBtn.disabled = false;
             return;
           }
         }
 
-        var entry = { fileName: pickedFile.name, updatedAt: new Date().toISOString() };
-        metrics.forEach(function (m) { entry[m.key] = result[m.key]; });
-        entry.weeks = result.weeks;
-        state[congregation] = entry;
-        saveState();
+        state[congregation] = {
+          weeks: scan.weeks,
+          children: childrenResult,
+          youth: youthResult,
+          fileName: pickedFile.name,
+          updatedAt: new Date().toISOString()
+        };
+        saveDataState(state);
         renderAll();
 
-        var parts = metrics.map(function (m) {
-          return m.label + " " + formatNum(result[m.key]);
-        });
         showStatus(
-          "已加入「" + congregation + "」：共 " + result.weeks + " 週，" + parts.join("、"),
+          "已加入「" + congregation + "」：共 " + scan.weeks + " 週。" +
+          "兒童 — 主日 " + formatNum(childrenResult.avgSunday) + "、召會生活 " + formatNum(childrenResult.avgLife) + "、小排 " + formatNum(childrenResult.avgGroup) + "；" +
+          "青職 — 主日 " + formatNum(youthResult.avgSunday) + "、家聚會 " + formatNum(youthResult.avgFamily) + "、小排 " + formatNum(youthResult.avgGroup) + "、生命讀經 " + formatNum(youthResult.avgLifeReading),
           "ok"
         );
 
@@ -446,139 +524,22 @@
 
     function onResetAllClick() {
       if (!Object.keys(state).length) return;
-      var ok = window.confirm("確定要清除所有已上傳的召會資料嗎？此操作無法復原。");
+      var ok = window.confirm("確定要清除所有已上傳的召會資料嗎？（兒童、青職資料會一併清除，此操作無法復原）");
       if (!ok) return;
       state = {};
-      saveState();
+      saveDataState(state);
       renderAll();
       clearStatus();
     }
 
-    function removeCongregation(name) {
-      var ok = window.confirm("確定要移除「" + name + "」的資料嗎？");
-      if (!ok) return;
-      delete state[name];
-      saveState();
-      renderAll();
-    }
+    initSelect();
+    setupDropzone();
+    els.parseBtn.addEventListener("click", onParseClick);
+    els.resetAllBtn.addEventListener("click", onResetAllClick);
+    childrenSection.bindCopyButton(function () { return state; });
+    youthSection.bindCopyButton(function () { return state; });
 
-    function renderChecklist() {
-      var uploadedCount = 0;
-      els.chipGrid.innerHTML = "";
-      CONGREGATIONS.forEach(function (name) {
-        var chip = document.createElement("span");
-        var done = Object.prototype.hasOwnProperty.call(state, name);
-        if (done) uploadedCount++;
-        chip.className = "chip" + (done ? " done" : "");
-        chip.textContent = name;
-        els.chipGrid.appendChild(chip);
-      });
-      els.progressCount.textContent = uploadedCount;
-      els.progressTotal.textContent = CONGREGATIONS.length;
-      els.progressBar.style.width = (uploadedCount / CONGREGATIONS.length * 100) + "%";
-      return uploadedCount;
-    }
-
-    function renderTable() {
-      els.resultsTbody.innerHTML = "";
-      var names = CONGREGATIONS.filter(function (name) {
-        return Object.prototype.hasOwnProperty.call(state, name);
-      });
-
-      els.resultsEmpty.style.display = names.length ? "none" : "block";
-
-      names.forEach(function (name) {
-        var d = state[name];
-        var html = "<td>" + name + "</td><td>" + d.weeks + "</td>";
-        metrics.forEach(function (m) {
-          html += "<td>" + formatNum(d[m.key]) + "</td>";
-        });
-        html += "<td><button class=\"btn-danger-ghost\" data-remove=\"" + name + "\">移除</button></td>";
-        var tr = document.createElement("tr");
-        tr.innerHTML = html;
-        els.resultsTbody.appendChild(tr);
-      });
-
-      els.resultsTbody.querySelectorAll("[data-remove]").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          removeCongregation(btn.getAttribute("data-remove"));
-        });
-      });
-    }
-
-    function computeTotals() {
-      var totals = {};
-      metrics.forEach(function (m) { totals[m.key] = 0; });
-      Object.keys(state).forEach(function (name) {
-        var d = state[name];
-        metrics.forEach(function (m) { totals[m.key] += d[m.key] || 0; });
-      });
-      return totals;
-    }
-
-    function renderSummary() {
-      var totals = computeTotals();
-      metrics.forEach(function (m) {
-        var el = document.getElementById(prefix + "-total-" + m.key);
-        if (el) el.textContent = formatNum(totals[m.key]);
-      });
-
-      var missing = CONGREGATIONS.filter(function (name) {
-        return !Object.prototype.hasOwnProperty.call(state, name);
-      });
-
-      if (missing.length) {
-        els.summaryWarn.style.display = "block";
-        els.summaryWarn.textContent =
-          "尚有 " + missing.length + " 個召會未上傳（" + missing.join("、") + "），以上總計僅計入已上傳的召會。";
-      } else {
-        els.summaryWarn.style.display = "none";
-      }
-    }
-
-    function onCopySummaryClick() {
-      var uploadedNames = CONGREGATIONS.filter(function (name) {
-        return Object.prototype.hasOwnProperty.call(state, name);
-      });
-      var totals = computeTotals();
-
-      var lines = [];
-      lines.push(cfg.summaryTitle + "（已上傳 " + uploadedNames.length + " / " + CONGREGATIONS.length + " 個召會）");
-      metrics.forEach(function (m) {
-        lines.push(m.totalLabel + "：" + formatNum(totals[m.key]));
-      });
-
-      var text = lines.join("\n");
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function () {
-          showStatus("已複製總計文字", "ok");
-        }).catch(function () {
-          window.prompt("複製以下文字：", text);
-        });
-      } else {
-        window.prompt("複製以下文字：", text);
-      }
-    }
-
-    function renderAll() {
-      renderChecklist();
-      renderTable();
-      renderSummary();
-    }
-
-    function init() {
-      initSelect();
-      initTableHeader();
-      initSummaryGrid();
-      setupDropzone();
-      els.parseBtn.addEventListener("click", onParseClick);
-      els.resetAllBtn.addEventListener("click", onResetAllClick);
-      els.copySummaryBtn.addEventListener("click", onCopySummaryClick);
-      renderAll();
-    }
-
-    init();
+    renderAll();
   }
 
   function initTabs() {
@@ -658,31 +619,7 @@
   function init() {
     initTabs();
     initSettingsModal();
-
-    createStatsModule({
-      prefix: "children",
-      storageKey: "childrenStatsGenerator_v1",
-      parseFn: parseChildrenWorkbook,
-      summaryTitle: "全台兒童統計",
-      metrics: [
-        { key: "avgSunday", label: "主日（週平均）", totalLabel: "主日總計" },
-        { key: "lifeCount", label: "召會生活（期間人數）", totalLabel: "召會生活總計" },
-        { key: "avgGroup", label: "小排（週平均）", totalLabel: "小排總計" }
-      ]
-    });
-
-    createStatsModule({
-      prefix: "youth",
-      storageKey: "youthStatsGenerator_v1",
-      parseFn: parseYouthWorkbook,
-      summaryTitle: "全台青職統計",
-      metrics: [
-        { key: "avgSunday", label: "主日（週平均）", totalLabel: "主日總計" },
-        { key: "avgFamily", label: "家聚會（出訪+受訪，週平均）", totalLabel: "家聚會總計" },
-        { key: "avgGroup", label: "小排（週平均）", totalLabel: "小排總計" },
-        { key: "avgLifeReading", label: "生命讀經（週平均）", totalLabel: "生命讀經總計" }
-      ]
-    });
+    initUploadAndSections();
 
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
