@@ -5,4 +5,5 @@ compatibility_date = "2024-09-23"
 [[d1_databases]]
 binding = "DB"
 database_name = "all-children-db"
-database_id = "REPLACE_WITH_DATABASE_ID"
+database_id = \"bf5a30fd-e91c-4102-97c6-7db89b964ee3\"
+
