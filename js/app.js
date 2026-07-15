@@ -7,29 +7,70 @@
     "竹崎", "番路", "民雄", "溪口", "大林", "新港", "六腳", "朴子",
     "布袋", "鹿草", "太保", "水上"
   ];
+  var DEFAULT_REGION_NAME = "未分區";
+  var DEFAULT_GROUPS = [{ region: DEFAULT_REGION_NAME, members: DEFAULT_CONGREGATIONS.slice() }];
 
-  var CONGREGATIONS_STORAGE_KEY = "congregationList_v1";
+  var GROUPS_STORAGE_KEY = "congregationGroups_v1";
+  var LEGACY_FLAT_STORAGE_KEY = "congregationList_v1";
 
-  function loadCongregations() {
+  function normalizeGroups(raw) {
+    if (!Array.isArray(raw)) return null;
+    var seen = {};
+    var groups = [];
+    raw.forEach(function (g) {
+      if (!g || typeof g.region !== "string" || !Array.isArray(g.members)) return;
+      var region = g.region.trim();
+      if (!region) return;
+      var members = [];
+      g.members.forEach(function (name) {
+        var n = typeof name === "string" ? name.trim() : "";
+        if (!n || seen[n]) return;
+        seen[n] = true;
+        members.push(n);
+      });
+      groups.push({ region: region, members: members });
+    });
+    return groups;
+  }
+
+  function loadCongregationGroups() {
     try {
-      var raw = localStorage.getItem(CONGREGATIONS_STORAGE_KEY);
-      if (raw == null) return DEFAULT_CONGREGATIONS.slice();
-      var parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : DEFAULT_CONGREGATIONS.slice();
+      var raw = localStorage.getItem(GROUPS_STORAGE_KEY);
+      if (raw != null) {
+        var parsed = normalizeGroups(JSON.parse(raw));
+        if (parsed) return parsed;
+      }
+      var legacyRaw = localStorage.getItem(LEGACY_FLAT_STORAGE_KEY);
+      if (legacyRaw != null) {
+        var legacyParsed = JSON.parse(legacyRaw);
+        if (Array.isArray(legacyParsed)) {
+          return normalizeGroups([{ region: DEFAULT_REGION_NAME, members: legacyParsed }]) || DEFAULT_GROUPS;
+        }
+      }
+      return DEFAULT_GROUPS.map(function (g) { return { region: g.region, members: g.members.slice() }; });
     } catch (e) {
-      return DEFAULT_CONGREGATIONS.slice();
+      return DEFAULT_GROUPS.map(function (g) { return { region: g.region, members: g.members.slice() }; });
     }
   }
 
-  function saveCongregations(list) {
+  function saveCongregationGroups(groups) {
     try {
-      localStorage.setItem(CONGREGATIONS_STORAGE_KEY, JSON.stringify(list));
+      localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(groups));
     } catch (e) {
       /* storage unavailable, ignore */
     }
   }
 
-  var CONGREGATIONS = loadCongregations();
+  function flattenGroups(groups) {
+    var flat = [];
+    groups.forEach(function (g) {
+      g.members.forEach(function (name) { flat.push(name); });
+    });
+    return flat;
+  }
+
+  var CONGREGATION_GROUPS = loadCongregationGroups();
+  var CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
 
   var TOTAL_LABEL = "合計";
 
@@ -202,13 +243,13 @@
       resultsTheadRow: id("results-thead-row"),
       resultsTbody: id("results-tbody"),
       resultsEmpty: id("results-empty"),
+      downloadBtn: id("download-btn"),
       summaryGrid: id("summary-grid"),
-      summaryWarn: id("summary-warn"),
-      copySummaryBtn: id("copy-summary-btn")
+      summaryWarn: id("summary-warn")
     };
 
     function initTableHeader() {
-      var html = "<th>召會</th><th>週數</th>";
+      var html = "<th>召會 / 區域</th><th>週數</th>";
       metrics.forEach(function (m) { html += "<th>" + m.label + "</th>"; });
       els.resultsTheadRow.innerHTML = html;
     }
@@ -241,22 +282,54 @@
       els.progressBar.style.width = (CONGREGATIONS.length ? (uploadedCount / CONGREGATIONS.length * 100) : 0) + "%";
     }
 
+    function averageRow(entries) {
+      var avg = { weeks: 0 };
+      metrics.forEach(function (m) { avg[m.key] = 0; });
+      if (!entries.length) return avg;
+      avg.weeks = entries.reduce(function (acc, d) { return acc + d.weeks; }, 0) / entries.length;
+      metrics.forEach(function (m) {
+        avg[m.key] = entries.reduce(function (acc, d) { return acc + (d[m.key] || 0); }, 0) / entries.length;
+      });
+      return avg;
+    }
+
+    function buildRows(state) {
+      // returns [{type:'region', region, data}, {type:'congregation', name, data}, ...]
+      var out = [];
+      CONGREGATION_GROUPS.forEach(function (group) {
+        var uploaded = group.members.filter(function (name) {
+          return Object.prototype.hasOwnProperty.call(state, name);
+        });
+        if (!uploaded.length) return;
+        var entries = uploaded.map(function (name) { return extract(state[name]); });
+        out.push({ type: "region", region: group.region, data: averageRow(entries) });
+        uploaded.forEach(function (name) {
+          out.push({ type: "congregation", name: name, data: extract(state[name]) });
+        });
+      });
+      return out;
+    }
+
     function renderTable(state, onRemove) {
       els.resultsTbody.innerHTML = "";
-      var names = CONGREGATIONS.filter(function (name) {
-        return Object.prototype.hasOwnProperty.call(state, name);
-      });
+      var rowsData = buildRows(state);
 
-      els.resultsEmpty.style.display = names.length ? "none" : "block";
+      els.resultsEmpty.style.display = rowsData.length ? "none" : "block";
+      els.downloadBtn.disabled = !rowsData.length;
 
-      names.forEach(function (name) {
-        var d = extract(state[name]);
-        var html = "<td>" + name + "</td><td>" + d.weeks + "</td>";
-        metrics.forEach(function (m) {
-          html += "<td>" + formatNum(d[m.key]) + "</td>";
-        });
-        html += "<td><button class=\"btn-danger-ghost\" data-remove=\"" + name + "\">移除</button></td>";
+      rowsData.forEach(function (r) {
         var tr = document.createElement("tr");
+        var html;
+        if (r.type === "region") {
+          tr.className = "region-row";
+          html = "<td>" + r.region + "（區域平均）</td><td>" + formatNum(r.data.weeks) + "</td>";
+          metrics.forEach(function (m) { html += "<td>" + formatNum(r.data[m.key]) + "</td>"; });
+          html += "<td></td>";
+        } else {
+          html = "<td class=\"congregation-name\">" + r.name + "</td><td>" + r.data.weeks + "</td>";
+          metrics.forEach(function (m) { html += "<td>" + formatNum(r.data[m.key]) + "</td>"; });
+          html += "<td><button class=\"btn-danger-ghost\" data-remove=\"" + r.name + "\">移除</button></td>";
+        }
         tr.innerHTML = html;
         els.resultsTbody.appendChild(tr);
       });
@@ -292,38 +365,25 @@
       } else {
         els.summaryWarn.style.display = "none";
       }
-
-      return totals;
     }
 
-    function onCopySummaryClick(state) {
-      var uploadedNames = CONGREGATIONS.filter(function (name) {
-        return Object.prototype.hasOwnProperty.call(state, name);
-      });
-      var totals = {};
-      metrics.forEach(function (m) { totals[m.key] = 0; });
-      uploadedNames.forEach(function (name) {
-        var d = extract(state[name]);
-        metrics.forEach(function (m) { totals[m.key] += d[m.key] || 0; });
-      });
+    function onDownloadClick(state) {
+      var rowsData = buildRows(state);
+      if (!rowsData.length) return;
 
-      var lines = [];
-      lines.push(cfg.summaryTitle + "（已上傳 " + uploadedNames.length + " / " + CONGREGATIONS.length + " 個召會）");
-      metrics.forEach(function (m) {
-        lines.push(m.totalLabel + "：" + formatNum(totals[m.key]));
+      var header = ["召會 / 區域", "週數"].concat(metrics.map(function (m) { return m.label; }));
+      var aoa = [header];
+      rowsData.forEach(function (r) {
+        var label = r.type === "region" ? (r.region + "（區域平均）") : r.name;
+        var row = [label, formatNum(r.data.weeks)];
+        metrics.forEach(function (m) { row.push(formatNum(r.data[m.key])); });
+        aoa.push(row);
       });
 
-      var text = lines.join("\n");
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function () {
-          window.showGlobalStatus("已複製總計文字", "ok");
-        }).catch(function () {
-          window.prompt("複製以下文字：", text);
-        });
-      } else {
-        window.prompt("複製以下文字：", text);
-      }
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      var wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, cfg.summaryTitle);
+      XLSX.writeFile(wb, cfg.fileBaseName + ".xlsx");
     }
 
     initTableHeader();
@@ -335,9 +395,9 @@
         renderTable(state, onRemove);
         renderSummary(state);
       },
-      bindCopyButton: function (getState) {
-        els.copySummaryBtn.addEventListener("click", function () {
-          onCopySummaryClick(getState());
+      bindDownloadButton: function (getState) {
+        els.downloadBtn.addEventListener("click", function () {
+          onDownloadClick(getState());
         });
       }
     };
@@ -379,7 +439,6 @@
       els.statusMsg.textContent = message;
       els.statusMsg.className = "status-msg show " + type;
     }
-    window.showGlobalStatus = showStatus;
 
     function clearStatus() {
       els.statusMsg.className = "status-msg";
@@ -395,11 +454,16 @@
         els.parseBtn.disabled = true;
         return;
       }
-      CONGREGATIONS.forEach(function (name) {
-        var opt = document.createElement("option");
-        opt.value = name;
-        opt.textContent = name;
-        els.select.appendChild(opt);
+      CONGREGATION_GROUPS.forEach(function (group) {
+        var optgroup = document.createElement("optgroup");
+        optgroup.label = group.region;
+        group.members.forEach(function (name) {
+          var opt = document.createElement("option");
+          opt.value = name;
+          opt.textContent = name;
+          optgroup.appendChild(opt);
+        });
+        els.select.appendChild(optgroup);
       });
     }
 
@@ -434,6 +498,7 @@
     var childrenSection = createSection({
       prefix: "children",
       summaryTitle: "全台兒童統計",
+      fileBaseName: "children-stats",
       extract: function (entry) { return entry.children; },
       metrics: [
         { key: "avgSunday", label: "主日（週平均）", totalLabel: "主日總計" },
@@ -445,6 +510,7 @@
     var youthSection = createSection({
       prefix: "youth",
       summaryTitle: "全台青職統計",
+      fileBaseName: "youth-stats",
       extract: function (entry) { return entry.youth; },
       metrics: [
         { key: "avgSunday", label: "主日（週平均）", totalLabel: "主日總計" },
@@ -536,8 +602,8 @@
     setupDropzone();
     els.parseBtn.addEventListener("click", onParseClick);
     els.resetAllBtn.addEventListener("click", onResetAllClick);
-    childrenSection.bindCopyButton(function () { return state; });
-    youthSection.bindCopyButton(function () { return state; });
+    childrenSection.bindDownloadButton(function () { return state; });
+    youthSection.bindDownloadButton(function () { return state; });
 
     renderAll();
   }
@@ -555,16 +621,36 @@
     });
   }
 
-  function parseCongregationLines(text) {
+  function groupsToText(groups) {
+    return groups.map(function (g) {
+      return g.region + "\n" + g.members.map(function (m) { return "  " + m; }).join("\n");
+    }).join("\n");
+  }
+
+  function textToGroups(text) {
     var seen = {};
-    var list = [];
+    var groups = [];
+    var current = null;
+
     text.split("\n").forEach(function (line) {
-      var name = line.trim();
-      if (!name || seen[name]) return;
-      seen[name] = true;
-      list.push(name);
+      if (/^\s/.test(line)) {
+        var member = line.trim();
+        if (!member || seen[member]) return;
+        if (!current) {
+          current = { region: DEFAULT_REGION_NAME, members: [] };
+          groups.push(current);
+        }
+        seen[member] = true;
+        current.members.push(member);
+      } else {
+        var region = line.trim();
+        if (!region) return;
+        current = { region: region, members: [] };
+        groups.push(current);
+      }
     });
-    return list;
+
+    return groups.filter(function (g) { return g.members.length > 0; });
   }
 
   function initSettingsModal() {
@@ -578,12 +664,13 @@
     var saveBtn = document.getElementById("settings-save-btn");
 
     function updateCount() {
-      var count = parseCongregationLines(textarea.value).length;
-      countEl.textContent = "目前共 " + count + " 個召會";
+      var groups = textToGroups(textarea.value);
+      var total = groups.reduce(function (acc, g) { return acc + g.members.length; }, 0);
+      countEl.textContent = "目前共 " + groups.length + " 個區域、" + total + " 個召會";
     }
 
     function open() {
-      textarea.value = loadCongregations().join("\n");
+      textarea.value = groupsToText(loadCongregationGroups());
       updateCount();
       backdrop.style.display = "flex";
     }
@@ -605,13 +692,13 @@
     });
 
     defaultBtn.addEventListener("click", function () {
-      textarea.value = DEFAULT_CONGREGATIONS.join("\n");
+      textarea.value = groupsToText(DEFAULT_GROUPS);
       updateCount();
     });
 
     saveBtn.addEventListener("click", function () {
-      var list = parseCongregationLines(textarea.value);
-      saveCongregations(list);
+      var groups = textToGroups(textarea.value);
+      saveCongregationGroups(groups);
       window.location.reload();
     });
   }
