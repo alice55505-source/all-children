@@ -9,8 +9,10 @@
   ];
 
   var STORAGE_KEY = "childrenStatsGenerator_v1";
-  var SHEET_NAME = "週報矩陣";
+  var WEEKLY_SHEET_NAME = "週報矩陣";
+  var SUMMARY_SHEET_NAME = "摘要";
   var TOTAL_LABEL = "合計";
+  var LIFE_KPI_LABEL = "期間有召會生活";
 
   var state = loadState();
   var pickedFile = null;
@@ -79,19 +81,23 @@
     return -1;
   }
 
-  function parseWorkbook(workbook) {
-    var sheet = workbook.Sheets[SHEET_NAME];
+  function getSheet(workbook, preferredName, fallbackIndex) {
+    var sheet = workbook.Sheets[preferredName];
     if (!sheet) {
-      var fallbackName = workbook.SheetNames[2];
+      var fallbackName = workbook.SheetNames[fallbackIndex];
       sheet = fallbackName ? workbook.Sheets[fallbackName] : null;
     }
+    return sheet;
+  }
+
+  function parseWeeklyMatrix(sheet) {
     if (!sheet) {
-      throw new Error("找不到「" + SHEET_NAME + "」分頁，請確認上傳的檔案格式");
+      throw new Error("找不到「" + WEEKLY_SHEET_NAME + "」分頁，請確認上傳的檔案格式");
     }
 
     var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
     if (!rows.length) {
-      throw new Error("「" + SHEET_NAME + "」分頁是空的");
+      throw new Error("「" + WEEKLY_SHEET_NAME + "」分頁是空的");
     }
 
     var header = rows[0].map(function (cell) {
@@ -101,16 +107,15 @@
     var idx = {
       區排: findHeaderIndex(header, "區排"),
       主日: findHeaderIndex(header, "主日"),
-      小排: findHeaderIndex(header, "小排"),
-      召會生活: findHeaderIndex(header, "召會生活")
+      小排: findHeaderIndex(header, "小排")
     };
 
     var missing = Object.keys(idx).filter(function (key) { return idx[key] === -1; });
     if (missing.length) {
-      throw new Error("找不到欄位：" + missing.join("、"));
+      throw new Error("在「" + WEEKLY_SHEET_NAME + "」分頁找不到欄位：" + missing.join("、"));
     }
 
-    var sums = { 主日: 0, 小排: 0, 召會生活: 0 };
+    var sums = { 主日: 0, 小排: 0 };
     var weeks = 0;
 
     for (var i = 1; i < rows.length; i++) {
@@ -121,24 +126,59 @@
         weeks++;
         sums.主日 += Number(row[idx.主日]) || 0;
         sums.小排 += Number(row[idx.小排]) || 0;
-        sums.召會生活 += Number(row[idx.召會生活]) || 0;
       }
     }
 
     if (weeks === 0) {
-      throw new Error("在「" + SHEET_NAME + "」分頁中找不到「" + TOTAL_LABEL + "」列");
+      throw new Error("在「" + WEEKLY_SHEET_NAME + "」分頁中找不到「" + TOTAL_LABEL + "」列");
     }
 
     return {
       weeks: weeks,
       avgSunday: sums.主日 / weeks,
-      avgGroup: sums.小排 / weeks,
-      avgLife: sums.召會生活 / weeks
+      avgGroup: sums.小排 / weeks
+    };
+  }
+
+  function parseLifeKpi(sheet) {
+    if (!sheet) {
+      throw new Error("找不到「" + SUMMARY_SHEET_NAME + "」分頁，請確認上傳的檔案格式");
+    }
+
+    var rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      if (!row) continue;
+      var label = row[0];
+      if (label != null && String(label).trim() === LIFE_KPI_LABEL) {
+        return Number(row[1]) || 0;
+      }
+    }
+
+    throw new Error("在「" + SUMMARY_SHEET_NAME + "」分頁找不到「" + LIFE_KPI_LABEL + "」");
+  }
+
+  function parseWorkbook(workbook) {
+    var weeklySheet = getSheet(workbook, WEEKLY_SHEET_NAME, 2);
+    var summarySheet = getSheet(workbook, SUMMARY_SHEET_NAME, 1);
+
+    var weekly = parseWeeklyMatrix(weeklySheet);
+    var lifeCount = parseLifeKpi(summarySheet);
+
+    return {
+      weeks: weekly.weeks,
+      avgSunday: weekly.avgSunday,
+      avgGroup: weekly.avgGroup,
+      lifeCount: lifeCount
     };
   }
 
   function formatNum(n) {
     return Math.round(n * 10) / 10;
+  }
+
+  function getLifeCount(d) {
+    return d.lifeCount != null ? d.lifeCount : d.avgLife;
   }
 
   function handleFileSelected(file) {
@@ -199,7 +239,7 @@
         weeks: result.weeks,
         avgSunday: result.avgSunday,
         avgGroup: result.avgGroup,
-        avgLife: result.avgLife,
+        lifeCount: result.lifeCount,
         fileName: pickedFile.name,
         updatedAt: new Date().toISOString()
       };
@@ -209,8 +249,8 @@
       showStatus(
         "已加入「" + congregation + "」：共 " + result.weeks + " 週，" +
         "主日平均 " + formatNum(result.avgSunday) + "、" +
-        "小排平均 " + formatNum(result.avgGroup) + "、" +
-        "召會生活平均 " + formatNum(result.avgLife),
+        "召會生活（期間有召會生活人數）" + formatNum(result.lifeCount) + "、" +
+        "小排平均 " + formatNum(result.avgGroup),
         "ok"
       );
 
@@ -274,8 +314,8 @@
         "<td>" + name + "</td>" +
         "<td>" + d.weeks + "</td>" +
         "<td>" + formatNum(d.avgSunday) + "</td>" +
+        "<td>" + formatNum(getLifeCount(d)) + "</td>" +
         "<td>" + formatNum(d.avgGroup) + "</td>" +
-        "<td>" + formatNum(d.avgLife) + "</td>" +
         "<td><button class=\"btn-danger-ghost\" data-remove=\"" + name + "\">移除</button></td>";
       els.resultsTbody.appendChild(tr);
     });
@@ -293,7 +333,7 @@
       var d = state[name];
       totals.sunday += d.avgSunday;
       totals.group += d.avgGroup;
-      totals.life += d.avgLife;
+      totals.life += getLifeCount(d);
     });
 
     els.totalSunday.textContent = formatNum(totals.sunday);
@@ -324,14 +364,14 @@
       var d = state[name];
       totals.sunday += d.avgSunday;
       totals.group += d.avgGroup;
-      totals.life += d.avgLife;
+      totals.life += getLifeCount(d);
     });
 
     var lines = [];
     lines.push("全台兒童統計（已上傳 " + uploadedNames.length + " / " + CONGREGATIONS.length + " 個召會）");
     lines.push("主日總計：" + formatNum(totals.sunday));
-    lines.push("小排總計：" + formatNum(totals.group));
     lines.push("召會生活總計：" + formatNum(totals.life));
+    lines.push("小排總計：" + formatNum(totals.group));
 
     var text = lines.join("\n");
 

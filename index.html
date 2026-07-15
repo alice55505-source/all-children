@@ -60,16 +60,16 @@
   </section>
 
   <section class="card">
-    <h2>3. 各召會結果（每週平均）</h2>
+    <h2>3. 各召會結果</h2>
     <div class="table-scroll">
       <table id="results-table">
         <thead>
           <tr>
             <th>召會</th>
             <th>週數</th>
-            <th>主日</th>
-            <th>小排</th>
-            <th>召會生活</th>
+            <th>主日（週平均）</th>
+            <th>召會生活（期間人數）</th>
+            <th>小排（週平均）</th>
             <th>操作</th>
           </tr>
         </thead>
@@ -87,12 +87,12 @@
         <div class="stat-value" id="total-sunday">0</div>
       </div>
       <div class="stat-tile">
-        <div class="stat-label">小排總計</div>
-        <div class="stat-value" id="total-group">0</div>
-      </div>
-      <div class="stat-tile">
         <div class="stat-label">召會生活總計</div>
         <div class="stat-value" id="total-life">0</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-label">小排總計</div>
+        <div class="stat-value" id="total-group">0</div>
       </div>
     </div>
     <div class="summary-warn" id="summary-warn" style="display:none;"></div>
@@ -102,8 +102,8 @@
   </section>
 
   <footer class="app-footer">
-    每個召會的數字為該召會「週報矩陣」分頁中「合計」列的每週平均值；全台總計為已上傳召會之平均值加總。<br />
-    資料僅儲存在本機瀏覽器（localStorage），不會上傳到任何伺服器。
+    主日、小排為該召會「週報矩陣」分頁中「合計」列的每週平均值；召會生活為「摘要」分頁 KPI 中「期間有召會生活」的人數。<br />
+    全台總計為已上傳召會之數值加總。資料僅儲存在本機瀏覽器（localStorage），不會上傳到任何伺服器。
   </footer>
 </div>
 
