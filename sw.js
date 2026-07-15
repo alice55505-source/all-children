@@ -1,4 +1,4 @@
-const CACHE_NAME = "children-stats-cache-v1";
+const CACHE_NAME = "children-stats-cache-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -14,7 +14,9 @@ const APP_SHELL = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(APP_SHELL))
+      .then((cache) => Promise.all(
+        APP_SHELL.map((url) => cache.add(url).catch(() => null))
+      ))
       .then(() => self.skipWaiting())
   );
 });
@@ -31,16 +33,17 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  var request = event.request;
+
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        if (response.ok && response.type === "basic") {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => cached);
-    })
+    fetch(request).then((response) => {
+      if (response && response.ok && response.type === "basic") {
+        var clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+      }
+      return response;
+    }).catch(() =>
+      caches.match(request).then((cached) => cached || caches.match("./index.html"))
+    )
   );
 });
