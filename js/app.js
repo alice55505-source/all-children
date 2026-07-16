@@ -124,6 +124,16 @@
     return out;
   }
 
+  // Standalone single-column metrics (兒童, 合計 - no age breakdown) are
+  // labelled with age "小計" in the per-week columns, but the report's own
+  // "N 週平均"/"N 週合計" summary blocks instead repeat the category name
+  // itself as the age label (e.g. category "兒童" / age "兒童"). Collapse
+  // that back to "小計" so both blocks key the same metric identically.
+  function normalizeAgeLabel(cat, ageCell) {
+    var age = ageCell != null ? String(ageCell).trim() : "";
+    return age === cat ? "小計" : age;
+  }
+
   function scanWeeklyGrid(workbook) {
     var sheet = getSheet(workbook, GRID_SHEET_NAME, 0);
     if (!sheet) {
@@ -165,24 +175,6 @@
       throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到分類或身份列");
     }
 
-    var weekPerCol = fillForward(weekRow, groupColIdx + 1);
-    var catPerCol = fillForward(categoryRow, groupColIdx + 1);
-
-    var matches = [];
-    var width = Math.max(weekRow.length, categoryRow.length, ageRow.length);
-    for (var col = groupColIdx + 1; col < width; col++) {
-      var wk = weekPerCol[col];
-      if (!wk || !GRID_WEEK_PATTERN.test(wk)) continue;
-      var cat = catPerCol[col];
-      if (!cat) continue;
-      var age = ageRow[col] != null ? String(ageRow[col]).trim() : "";
-      matches.push({ week: wk, key: cat + "|" + age, col: col });
-    }
-
-    if (!matches.length) {
-      throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到任何週別欄位資料");
-    }
-
     var dataStart = headerRowIdx + 3;
     var aggRow = null;
     var dataRows = [];
@@ -202,6 +194,71 @@
       throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到任何資料列");
     }
 
+    function valueAtCol(col) {
+      if (aggRow) return Number(aggRow[col]) || 0;
+      return dataRows.reduce(function (acc, dr) { return acc + (Number(dr[col]) || 0); }, 0);
+    }
+
+    var width = Math.max(weekRow.length, categoryRow.length, ageRow.length);
+
+    // Prefer the report's own pre-computed "N 週平均" column block over
+    // summing individual week columns ourselves - the sheet's own tool
+    // decides which weeks count toward that average (e.g. it may exclude
+    // weeks the raw grid still lists), so re-deriving it independently can
+    // silently disagree with the number the congregation actually reports.
+    var avgBlockStartCol = -1;
+    var avgWeeksLabel = null;
+    for (var col = groupColIdx + 1; col < weekRow.length; col++) {
+      var cell = weekRow[col];
+      if (cell == null) continue;
+      var m = String(cell).trim().match(/^(\d+)\s*週平均$/);
+      if (m) {
+        avgBlockStartCol = col;
+        avgWeeksLabel = m[1];
+        break;
+      }
+    }
+
+    if (avgBlockStartCol !== -1) {
+      var avgBlockEndCol = width;
+      for (var col2 = avgBlockStartCol + 1; col2 < width; col2++) {
+        if (weekRow[col2] != null && String(weekRow[col2]).trim() !== "") {
+          avgBlockEndCol = col2;
+          break;
+        }
+      }
+
+      var catPerColAvg = fillForward(categoryRow, avgBlockStartCol);
+      var avgSums = {};
+      for (var c = avgBlockStartCol; c < avgBlockEndCol; c++) {
+        var cat = catPerColAvg[c];
+        if (!cat) continue;
+        var age = normalizeAgeLabel(cat, ageRow[c]);
+        avgSums[cat + "|" + age] = valueAtCol(c);
+      }
+
+      return { weeks: Number(avgWeeksLabel) || 0, sums: avgSums };
+    }
+
+    // Fallback: no pre-computed average block found - sum each real week
+    // column ourselves and divide by how many week columns were detected.
+    var weekPerCol = fillForward(weekRow, groupColIdx + 1);
+    var catPerCol = fillForward(categoryRow, groupColIdx + 1);
+
+    var matches = [];
+    for (var col3 = groupColIdx + 1; col3 < width; col3++) {
+      var wk = weekPerCol[col3];
+      if (!wk || !GRID_WEEK_PATTERN.test(wk)) continue;
+      var cat3 = catPerCol[col3];
+      if (!cat3) continue;
+      var age3 = normalizeAgeLabel(cat3, ageRow[col3]);
+      matches.push({ week: wk, key: cat3 + "|" + age3, col: col3 });
+    }
+
+    if (!matches.length) {
+      throw new Error("在「" + GRID_SHEET_NAME + "」分頁找不到任何週別欄位資料");
+    }
+
     var sums = {};
     var weeksSet = {};
     var weeksCount = 0;
@@ -211,40 +268,32 @@
         weeksSet[m.week] = true;
         weeksCount++;
       }
-      var value;
-      if (aggRow) {
-        value = Number(aggRow[m.col]) || 0;
-      } else {
-        value = dataRows.reduce(function (acc, dr) {
-          return acc + (Number(dr[m.col]) || 0);
-        }, 0);
-      }
-      sums[m.key] = (sums[m.key] || 0) + value;
+      sums[m.key] = (sums[m.key] || 0) + valueAtCol(m.col);
     });
+
+    Object.keys(sums).forEach(function (key) { sums[key] = sums[key] / weeksCount; });
 
     return { weeks: weeksCount, sums: sums };
   }
 
   function deriveChildrenResult(scan) {
     var get = function (cat, age) { return scan.sums[cat + "|" + age] || 0; };
-    var weeks = scan.weeks;
     return {
-      weeks: weeks,
-      avgSunday: (get("兒童", "小計") + get("主日", "國小")) / weeks,
-      avgGroup: (get("小排", "學齡前") + get("小排", "國小")) / weeks,
-      avgLife: (get("召會生活", "學齡前") + get("召會生活", "國小")) / weeks
+      weeks: scan.weeks,
+      avgSunday: get("兒童", "小計") + get("主日", "國小"),
+      avgGroup: get("小排", "學齡前") + get("小排", "國小"),
+      avgLife: get("召會生活", "學齡前") + get("召會生活", "國小")
     };
   }
 
   function deriveYouthResult(scan) {
     var get = function (cat, age) { return scan.sums[cat + "|" + age] || 0; };
-    var weeks = scan.weeks;
     return {
-      weeks: weeks,
-      avgSunday: get("主日", "青職") / weeks,
-      avgFamily: (get("家聚會出訪", "青職") + get("家聚會受訪", "青職")) / weeks,
-      avgGroup: get("小排", "青職") / weeks,
-      avgLifeReading: get("生命讀經", "青職") / weeks
+      weeks: scan.weeks,
+      avgSunday: get("主日", "青職"),
+      avgFamily: get("家聚會出訪", "青職") + get("家聚會受訪", "青職"),
+      avgGroup: get("小排", "青職"),
+      avgLifeReading: get("生命讀經", "青職")
     };
   }
 
