@@ -1,3 +1,5 @@
+import { jsonResponse } from "../_lib.js";
+
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L to avoid confusion
 
 // Kept in sync with DEFAULT_GROUPS in js/app.js - only used to seed brand-new
@@ -36,14 +38,8 @@ export async function onRequestPost(context) {
       "INSERT INTO rooms (id, created_at, groups_json, stats_json, updated_at) VALUES (?, ?, ?, '{}', ?)"
     ).bind(id, now, groupsJson, now).run();
 
-    return new Response(JSON.stringify({ id: id }), {
-      status: 201,
-      headers: { "Content-Type": "application/json" }
-    });
+    return jsonResponse({ id: id }, 201);
   }
 
-  return new Response(JSON.stringify({ error: "無法產生房間代碼，請重試" }), {
-    status: 500,
-    headers: { "Content-Type": "application/json" }
-  });
+  return jsonResponse({ error: "無法產生房間代碼，請重試" }, 500);
 }

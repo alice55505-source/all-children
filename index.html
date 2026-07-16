@@ -53,7 +53,11 @@
   </section>
 
   <div class="room-bar" id="room-bar" style="display:none;">
-    <span>房間代碼：<strong id="room-code-display"></strong></span>
+    <div class="room-bar-info">
+      <span class="room-name" id="room-name-display"></span>
+      <button class="btn-danger-ghost room-rename-btn" id="rename-room-btn" title="幫房間命名">✏️ 命名</button>
+      <span>房間代碼：<strong id="room-code-display"></strong></span>
+    </div>
     <div class="room-bar-actions">
       <button class="btn-secondary" id="copy-room-code-btn">複製房間代碼</button>
       <button class="btn-secondary" id="refresh-room-btn">重新整理資料</button>
@@ -107,7 +111,7 @@
     </section>
 
     <section class="card">
-      <h2>3. 各召會結果 <span class="badge">依區域分組，區域列為該區平均</span></h2>
+      <h2>3. 各召會結果 <span class="badge">依區域分組，區域列為該區總計</span></h2>
       <div class="table-scroll">
         <table>
           <thead><tr id="children-results-thead-row"></tr></thead>
@@ -145,7 +149,7 @@
     </section>
 
     <section class="card">
-      <h2>3. 各召會結果 <span class="badge">依區域分組，區域列為該區平均</span></h2>
+      <h2>3. 各召會結果 <span class="badge">依區域分組，區域列為該區總計</span></h2>
       <div class="table-scroll">
         <table>
           <thead><tr id="youth-results-thead-row"></tr></thead>
@@ -170,7 +174,7 @@
   </div>
 
   <footer class="app-footer">
-    全台總計為已上傳召會之數值加總。資料儲存在這個房間專屬的雲端資料庫，只有知道房間代碼／連結的人看得到。
+    全台總計為已上傳召會之數值加總。資料儲存在這個房間專屬的雲端資料庫，只有知道房間代碼的人看得到。
   </footer>
 
   </div>

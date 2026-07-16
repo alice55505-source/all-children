@@ -95,13 +95,51 @@
     });
   }
 
-  function apiSaveRoom(id, groups, stats) {
-    return fetch("/api/rooms/" + encodeURIComponent(id), {
+  function apiSaveGroups(id, groups) {
+    return fetch("/api/rooms/" + encodeURIComponent(id) + "/groups", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ groups: groups, stats: stats })
+      body: JSON.stringify({ groups: groups })
     }).then(function (res) {
       if (!res.ok) throw new Error("儲存失敗，請檢查網路連線");
+      return res.json();
+    });
+  }
+
+  function apiUpsertCongregation(id, name, entry) {
+    return fetch("/api/rooms/" + encodeURIComponent(id) + "/congregations/" + encodeURIComponent(name), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry)
+    }).then(function (res) {
+      if (!res.ok) throw new Error("儲存失敗，請檢查網路連線");
+      return res.json();
+    });
+  }
+
+  function apiDeleteCongregation(id, name) {
+    return fetch("/api/rooms/" + encodeURIComponent(id) + "/congregations/" + encodeURIComponent(name), {
+      method: "DELETE"
+    }).then(function (res) {
+      if (!res.ok) throw new Error("刪除失敗，請檢查網路連線");
+      return res.json();
+    });
+  }
+
+  function apiResetStats(id) {
+    return fetch("/api/rooms/" + encodeURIComponent(id) + "/reset", { method: "POST" }).then(function (res) {
+      if (!res.ok) throw new Error("清除失敗，請檢查網路連線");
+      return res.json();
+    });
+  }
+
+  function apiSetRoomName(id, name) {
+    return fetch("/api/rooms/" + encodeURIComponent(id) + "/name", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name })
+    }).then(function (res) {
+      if (!res.ok) throw new Error("命名失敗，請檢查網路連線");
       return res.json();
     });
   }
@@ -363,15 +401,19 @@
       els.progressBar.style.width = (CONGREGATIONS.length ? (uploadedCount / CONGREGATIONS.length * 100) : 0) + "%";
     }
 
-    function averageRow(entries) {
-      var avg = { weeks: 0 };
-      metrics.forEach(function (m) { avg[m.key] = 0; });
-      if (!entries.length) return avg;
-      avg.weeks = entries.reduce(function (acc, d) { return acc + d.weeks; }, 0) / entries.length;
+    function regionTotalRow(entries) {
+      // 週數 stays a mean (it's informational context, not one of the
+      // stats being reported); every actual metric column is a straight
+      // sum of the region's uploaded congregations, per how this region
+      // total is meant to be read.
+      var total = { weeks: 0 };
+      metrics.forEach(function (m) { total[m.key] = 0; });
+      if (!entries.length) return total;
+      total.weeks = entries.reduce(function (acc, d) { return acc + d.weeks; }, 0) / entries.length;
       metrics.forEach(function (m) {
-        avg[m.key] = entries.reduce(function (acc, d) { return acc + (d[m.key] || 0); }, 0) / entries.length;
+        total[m.key] = entries.reduce(function (acc, d) { return acc + (d[m.key] || 0); }, 0);
       });
-      return avg;
+      return total;
     }
 
     function buildRows(state) {
@@ -382,7 +424,7 @@
         });
         if (!uploaded.length) return;
         var entries = uploaded.map(function (name) { return extract(state[name]); });
-        out.push({ type: "region", region: group.region, data: averageRow(entries) });
+        out.push({ type: "region", region: group.region, data: regionTotalRow(entries) });
         uploaded.forEach(function (name) {
           out.push({ type: "congregation", name: name, data: extract(state[name]) });
         });
@@ -402,7 +444,7 @@
         var html;
         if (r.type === "region") {
           tr.className = "region-row";
-          html = "<td>" + r.region + "（區域平均）</td><td>" + formatNum(r.data.weeks) + "</td>";
+          html = "<td>" + r.region + "（區域總計）</td><td>" + formatNum(r.data.weeks) + "</td>";
           metrics.forEach(function (m) { html += "<td>" + formatNum(r.data[m.key]) + "</td>"; });
           html += "<td></td>";
         } else {
@@ -454,7 +496,7 @@
       var header = ["召會 / 區域", "週數"].concat(metrics.map(function (m) { return m.label; }));
       var aoa = [header];
       rowsData.forEach(function (r) {
-        var label = r.type === "region" ? (r.region + "（區域平均）") : r.name;
+        var label = r.type === "region" ? (r.region + "（區域總計）") : r.name;
         var row = [label, formatNum(r.data.weeks)];
         metrics.forEach(function (m) { row.push(formatNum(r.data[m.key])); });
         aoa.push(row);
@@ -483,13 +525,6 @@
     };
   }
 
-  function persist(statusEls) {
-    return apiSaveRoom(ROOM_ID, CONGREGATION_GROUPS, dataState).catch(function (err) {
-      if (statusEls) statusEls.showStatus("儲存失敗：" + err.message, "error");
-      throw err;
-    });
-  }
-
   function initUploadAndSections() {
     var els = {
       select: document.getElementById("congregation-select"),
@@ -502,6 +537,14 @@
     };
 
     var pickedFile = null;
+    var pendingWrites = 0;
+
+    function trackWrite(promise) {
+      pendingWrites++;
+      var done = function () { pendingWrites--; };
+      promise.then(done, done);
+      return promise;
+    }
 
     function showStatus(message, type) {
       els.statusMsg.textContent = message;
@@ -594,7 +637,9 @@
       if (!ok) return;
       delete dataState[name];
       renderAll();
-      persist({ showStatus: showStatus }).catch(function () {});
+      trackWrite(apiDeleteCongregation(ROOM_ID, name)).catch(function (err) {
+        showStatus("移除失敗：" + err.message, "error");
+      });
     }
 
     function renderAll() {
@@ -630,13 +675,14 @@
           }
         }
 
-        dataState[congregation] = {
+        var entry = {
           weeks: scan.weeks,
           children: childrenResult,
           youth: youthResult,
           fileName: pickedFile.name,
           updatedAt: new Date().toISOString()
         };
+        dataState[congregation] = entry;
         renderAll();
 
         showStatus(
@@ -652,9 +698,11 @@
         els.filePicked.textContent = "";
         els.parseBtn.disabled = false;
 
-        persist({ showStatus: showStatus }).then(function () {
+        trackWrite(apiUpsertCongregation(ROOM_ID, congregation, entry)).then(function () {
           showStatus("已加入「" + congregation + "」並儲存到房間。", "ok");
-        }).catch(function () {});
+        }).catch(function (err) {
+          showStatus("已加入「" + congregation + "」，但儲存失敗：" + err.message, "error");
+        });
       }).catch(function (err) {
         showStatus("解析失敗：" + err.message, "error");
         els.parseBtn.disabled = false;
@@ -668,7 +716,9 @@
       dataState = {};
       renderAll();
       clearStatus();
-      persist({ showStatus: showStatus }).catch(function () {});
+      trackWrite(apiResetStats(ROOM_ID)).catch(function (err) {
+        showStatus("清除失敗：" + err.message, "error");
+      });
     }
 
     initSelect();
@@ -680,7 +730,11 @@
 
     renderAll();
 
-    return { initSelect: initSelect, renderAll: renderAll };
+    return {
+      initSelect: initSelect,
+      renderAll: renderAll,
+      hasPendingWrites: function () { return pendingWrites > 0; }
+    };
   }
 
   function initTabs() {
@@ -775,18 +829,22 @@
     saveBtn.addEventListener("click", function () {
       saveBtn.disabled = true;
       var groups = textToGroups(textarea.value);
-      CONGREGATION_GROUPS = normalizeGroups(groups) || [];
-      CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
-      persist().then(function () {
+      var normalized = normalizeGroups(groups) || [];
+      apiSaveGroups(ROOM_ID, normalized).then(function () {
+        CONGREGATION_GROUPS = normalized;
+        CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
         saveBtn.disabled = false;
         close();
         app.initSelect();
         app.renderAll();
-      }).catch(function () {
+      }).catch(function (err) {
         saveBtn.disabled = false;
+        window.alert("儲存失敗：" + err.message);
       });
     });
   }
+
+  var POLL_INTERVAL_MS = 8000;
 
   function initLandingAndRoom() {
     var landing = document.getElementById("landing-screen");
@@ -797,13 +855,29 @@
     var joinBtn = document.getElementById("join-room-btn");
     var landingStatus = document.getElementById("landing-status-msg");
     var roomCodeDisplay = document.getElementById("room-code-display");
+    var roomNameDisplay = document.getElementById("room-name-display");
+    var renameBtn = document.getElementById("rename-room-btn");
     var copyCodeBtn = document.getElementById("copy-room-code-btn");
     var refreshBtn = document.getElementById("refresh-room-btn");
     var leaveBtn = document.getElementById("leave-room-btn");
 
+    var roomName = "";
+    var app = null;
+    var pollTimer = null;
+
     function showLandingStatus(message, type) {
       landingStatus.textContent = message;
       landingStatus.className = "status-msg show " + type;
+    }
+
+    function renderRoomName() {
+      if (roomName) {
+        roomNameDisplay.textContent = roomName;
+        roomNameDisplay.classList.remove("unnamed");
+      } else {
+        roomNameDisplay.textContent = "（尚未命名）";
+        roomNameDisplay.classList.add("unnamed");
+      }
     }
 
     createBtn.addEventListener("click", function () {
@@ -853,9 +927,67 @@
       }
     });
 
-    var refreshHandler = null;
+    renameBtn.addEventListener("click", function () {
+      var next = window.prompt("幫這個房間取個名字（例如「雲嘉區兒童統計」）：", roomName);
+      if (next == null) return;
+      next = next.trim();
+      renameBtn.disabled = true;
+      apiSetRoomName(ROOM_ID, next).then(function () {
+        roomName = next;
+        renderRoomName();
+        renameBtn.disabled = false;
+      }).catch(function (err) {
+        renameBtn.disabled = false;
+        window.alert("命名失敗：" + err.message);
+      });
+    });
+
+    // Applies a freshly-fetched room snapshot to the in-memory model and
+    // re-renders. Used for the initial load, the manual refresh button, and
+    // background polling alike, so teammates' uploads/settings changes show
+    // up here without everyone having to remember to click refresh.
+    function applyRoomData(data) {
+      CONGREGATION_GROUPS = normalizeGroups(data.groups) || CONGREGATION_GROUPS;
+      CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
+      dataState = data.stats && typeof data.stats === "object" ? data.stats : {};
+      roomName = data.name || "";
+      renderRoomName();
+
+      if (!app) {
+        app = initUploadAndSections();
+        initSettingsModal(app);
+      } else {
+        app.initSelect();
+        app.renderAll();
+      }
+    }
+
+    function startPolling() {
+      if (pollTimer) return;
+      pollTimer = setInterval(function () {
+        if (app && app.hasPendingWrites && app.hasPendingWrites()) return;
+        apiFetchRoom(ROOM_ID).then(function (fresh) {
+          CONGREGATION_GROUPS = normalizeGroups(fresh.groups) || CONGREGATION_GROUPS;
+          CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
+          dataState = fresh.stats && typeof fresh.stats === "object" ? fresh.stats : {};
+          roomName = fresh.name || "";
+          renderRoomName();
+          if (app) app.renderAll();
+        }).catch(function () {
+          /* transient network hiccup - just try again next tick */
+        });
+      }, POLL_INTERVAL_MS);
+    }
+
     refreshBtn.addEventListener("click", function () {
-      if (refreshHandler) refreshHandler();
+      refreshBtn.disabled = true;
+      apiFetchRoom(ROOM_ID).then(function (fresh) {
+        applyRoomData(fresh);
+        refreshBtn.disabled = false;
+      }).catch(function (err) {
+        refreshBtn.disabled = false;
+        showLandingStatus("重新整理失敗：" + err.message, "error");
+      });
     });
 
     function boot() {
@@ -870,43 +1002,14 @@
       createBtn.disabled = true;
       joinBtn.disabled = true;
 
-      loadRoom();
-    }
-
-    function loadRoom() {
       apiFetchRoom(ROOM_ID).then(function (data) {
-        CONGREGATION_GROUPS = normalizeGroups(data.groups) || [];
-        CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
-        dataState = data.stats && typeof data.stats === "object" ? data.stats : {};
-
         landing.style.display = "none";
         roomBar.style.display = "flex";
         appMain.style.display = "";
         roomCodeDisplay.textContent = ROOM_ID;
 
-        var app = window.__statsApp;
-        if (!app) {
-          app = initUploadAndSections();
-          initSettingsModal(app);
-          window.__statsApp = app;
-        } else {
-          app.initSelect();
-          app.renderAll();
-        }
-
-        refreshHandler = function () {
-          refreshBtn.disabled = true;
-          apiFetchRoom(ROOM_ID).then(function (fresh) {
-            CONGREGATION_GROUPS = normalizeGroups(fresh.groups) || CONGREGATION_GROUPS;
-            CONGREGATIONS = flattenGroups(CONGREGATION_GROUPS);
-            dataState = fresh.stats && typeof fresh.stats === "object" ? fresh.stats : {};
-            app.initSelect();
-            app.renderAll();
-            refreshBtn.disabled = false;
-          }).catch(function () {
-            refreshBtn.disabled = false;
-          });
-        };
+        applyRoomData(data);
+        startPolling();
       }).catch(function (err) {
         landing.style.display = "";
         roomBar.style.display = "none";

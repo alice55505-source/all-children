@@ -531,6 +531,28 @@ td.congregation-name {
   letter-spacing: 0.05em;
 }
 
+.room-bar-info {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem 0.6rem;
+}
+
+.room-name {
+  font-weight: 700;
+}
+
+.room-name.unnamed {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.room-rename-btn {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.5rem;
+}
+
 .room-bar-actions {
   display: flex;
   flex-wrap: wrap;
