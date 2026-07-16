@@ -111,12 +111,6 @@
     return v ? v.trim().toUpperCase() : "";
   }
 
-  function buildRoomLink(id) {
-    var url = new URL(window.location.href);
-    url.search = "?room=" + encodeURIComponent(id);
-    return url.toString();
-  }
-
   function goToRoom(id) {
     var url = new URL(window.location.href);
     url.search = "?room=" + encodeURIComponent(id);
@@ -803,7 +797,7 @@
     var joinBtn = document.getElementById("join-room-btn");
     var landingStatus = document.getElementById("landing-status-msg");
     var roomCodeDisplay = document.getElementById("room-code-display");
-    var copyLinkBtn = document.getElementById("copy-room-link-btn");
+    var copyCodeBtn = document.getElementById("copy-room-code-btn");
     var refreshBtn = document.getElementById("refresh-room-btn");
     var leaveBtn = document.getElementById("leave-room-btn");
 
@@ -842,21 +836,20 @@
       window.location.href = url.toString();
     });
 
-    copyLinkBtn.addEventListener("click", function () {
-      var link = buildRoomLink(ROOM_ID);
-      var restoreText = copyLinkBtn.textContent;
+    copyCodeBtn.addEventListener("click", function () {
+      var restoreText = copyCodeBtn.textContent;
       var flash = function (text) {
-        copyLinkBtn.textContent = text;
-        setTimeout(function () { copyLinkBtn.textContent = restoreText; }, 1600);
+        copyCodeBtn.textContent = text;
+        setTimeout(function () { copyCodeBtn.textContent = restoreText; }, 1600);
       };
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(link).then(function () {
+        navigator.clipboard.writeText(ROOM_ID).then(function () {
           flash("已複製！");
         }).catch(function () {
-          window.prompt("複製這個連結：", link);
+          window.prompt("複製這個房間代碼：", ROOM_ID);
         });
       } else {
-        window.prompt("複製這個連結：", link);
+        window.prompt("複製這個房間代碼：", ROOM_ID);
       }
     });
 
