@@ -424,10 +424,10 @@
         });
         if (!uploaded.length) return;
         var entries = uploaded.map(function (name) { return extract(state[name]); });
-        out.push({ type: "region", region: group.region, data: regionTotalRow(entries) });
         uploaded.forEach(function (name) {
           out.push({ type: "congregation", name: name, data: extract(state[name]) });
         });
+        out.push({ type: "region", region: group.region, data: regionTotalRow(entries) });
       });
       return out;
     }
@@ -444,7 +444,7 @@
         var html;
         if (r.type === "region") {
           tr.className = "region-row";
-          html = "<td>" + r.region + "（區域總計）</td><td>" + formatNum(r.data.weeks) + "</td>";
+          html = "<td>" + r.region + "</td><td>" + formatNum(r.data.weeks) + "</td>";
           metrics.forEach(function (m) { html += "<td>" + formatNum(r.data[m.key]) + "</td>"; });
           html += "<td></td>";
         } else {
@@ -496,7 +496,7 @@
       var header = ["召會 / 區域", "週數"].concat(metrics.map(function (m) { return m.label; }));
       var aoa = [header];
       rowsData.forEach(function (r) {
-        var label = r.type === "region" ? (r.region + "（區域總計）") : r.name;
+        var label = r.type === "region" ? r.region : r.name;
         var row = [label, formatNum(r.data.weeks)];
         metrics.forEach(function (m) { row.push(formatNum(r.data[m.key])); });
         aoa.push(row);
