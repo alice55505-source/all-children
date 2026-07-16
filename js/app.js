@@ -58,6 +58,22 @@
     return Math.round(n * 10) / 10;
   }
 
+  // .xlsx files are ZIP archives (magic bytes "PK") and must be read as
+  // binary; .csv exports are plain UTF-8 text, and handing their raw bytes
+  // to XLSX.read as "array" silently mojibake's every Chinese character
+  // (it guesses a single-byte codepage instead of UTF-8). Sniff the actual
+  // bytes rather than trusting the file extension, and decode CSV text
+  // ourselves first so SheetJS parses already-correct UTF-8.
+  function readWorkbook(buf) {
+    var bytes = new Uint8Array(buf);
+    var isZip = bytes.length > 2 && bytes[0] === 0x50 && bytes[1] === 0x4b;
+    if (isZip) {
+      return XLSX.read(buf, { type: "array" });
+    }
+    var text = new TextDecoder("utf-8").decode(buf);
+    return XLSX.read(text, { type: "string" });
+  }
+
   // ---- Room API ----
 
   function apiCreateRoom() {
@@ -606,7 +622,7 @@
       els.parseBtn.disabled = true;
 
       pickedFile.arrayBuffer().then(function (buf) {
-        var workbook = XLSX.read(buf, { type: "array" });
+        var workbook = readWorkbook(buf);
         var scan = scanWeeklyGrid(workbook);
         var childrenResult = deriveChildrenResult(scan);
         var youthResult = deriveYouthResult(scan);
